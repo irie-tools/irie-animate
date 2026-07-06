@@ -6,6 +6,10 @@ It is not a static screenshot mockup. The app keeps editable project state, rend
 
 ## What Works
 
+- Public front door at `/` with workflow instructions and product positioning
+- Builder studio at `/studio`
+- Tenant admin back door at `/admin`
+- Local tenant backend in `.irie-animate/tenants/ak.json`
 - Project-backed editor state in `.irie-animate/projects/irie-demo/project.json`
 - Brand, scene, timeline, checklist, vitals, and asset edits through local API routes
 - Canvas preview that scrubs generated WebP frame sequences
@@ -38,6 +42,7 @@ In the editor, uploaded MP4/MOV files become scene source assets. When a scene p
 - Vercel deployment is not authenticated in this app. `Prepare Export` creates a deployable static folder instead.
 - Higgsfield/Fable generation is not called from this repo. Bring generated clips or reference media into the local pipeline.
 - The included demo frames are generated assets so the editor opens with a working preview.
+- Tenant/auth is currently local workspace state, not a hosted identity provider. `/admin` is an operator console, not secure production auth yet.
 
 ## Run It
 
@@ -47,6 +52,12 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+Routes:
+
+- `/` - front door and usage instructions
+- `/studio` - Irie Animate builder
+- `/admin` - local tenant admin console
 
 ## Rebuild Frames
 
@@ -84,7 +95,10 @@ npm run build
 ## Main Files
 
 - `src/components/IrieAnimateApp.tsx` - editor UI and local interaction state
+- `src/components/LandingPage.tsx` - public SaaS front door
+- `src/components/AdminConsole.tsx` - local tenant back door
 - `src/lib/projectStore.ts` - file-backed local project store
+- `src/lib/tenantStore.ts` - file-backed local tenant store
 - `src/lib/projectBrand.ts` - maps editable project state into render/export brand config
 - `src/lib/projectBrain.ts` - deterministic project readiness, blocker, and next-action analyzer
 - `src/lib/projectPipeline.ts` - source-aware project cook runner

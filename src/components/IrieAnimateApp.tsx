@@ -43,6 +43,7 @@ import brandConfig from "../../brands/irie-demo.json";
 import type { ProjectBrain } from "../lib/projectBrain";
 import { isVideoAsset } from "../lib/projectBrain";
 import type { EditorProject, TimelineTrack } from "../lib/projectStore";
+import type { TenantSettings } from "../lib/tenantStore";
 import type { BrandConfig, FramesManifest, SceneManifest } from "../lib/types";
 import styles from "./IrieAnimateApp.module.css";
 
@@ -83,6 +84,7 @@ export function IrieAnimateApp() {
   const drawSampleAt = useRef(0);
   const loadedFrames = useRef<Map<string, Array<HTMLImageElement | undefined>>>(new Map());
   const [project, setProject] = useState<EditorProject | null>(null);
+  const [tenant, setTenant] = useState<TenantSettings | null>(null);
   const [manifest, setManifest] = useState<FramesManifest | null>(null);
   const [brain, setBrain] = useState<ProjectBrain | null>(null);
   const [manifestError, setManifestError] = useState<string | null>(null);
@@ -134,6 +136,22 @@ export function IrieAnimateApp() {
   useEffect(() => {
     loadProject();
   }, [loadProject]);
+
+  const loadTenant = useCallback(async () => {
+    try {
+      const response = await fetch("/api/tenant", { cache: "no-store" });
+      const payload = await response.json();
+      if (response.ok && payload.ok) {
+        setTenant(payload.tenant as TenantSettings);
+      }
+    } catch {
+      setTenant(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTenant();
+  }, [loadTenant]);
 
   const loadBrain = useCallback(async () => {
     try {
@@ -570,7 +588,7 @@ export function IrieAnimateApp() {
         <div className={styles.productMark}>
           <span className={styles.sunburst} />
           <strong>IRIE ANIMATE</strong>
-          <small>{project?.version ?? "v1.7.2"}</small>
+          <small>{project?.version ?? "v1.7.2"} · {tenant?.plan ?? "Studio"}</small>
         </div>
         <div className={styles.breadcrumb}>
           <span>Projects</span>
@@ -590,7 +608,9 @@ export function IrieAnimateApp() {
           <button className={styles.publishButton} onClick={publishPreview}>
             Prepare Export <ChevronDown size={14} />
           </button>
-          <span className={styles.avatar}>AK</span>
+          <a className={styles.avatar} href="/admin" aria-label={`Open tenant admin for ${tenant?.workspaceName ?? "tenant"}`}>
+            {tenant?.ownerInitials ?? "AK"}
+          </a>
         </div>
       </header>
 
@@ -1045,6 +1065,16 @@ export function IrieAnimateApp() {
                     </select>
                   </label>
                 ))}
+              </div>
+              <div className={styles.metricBlock}>
+                <div className={styles.metricTitle}><span>Tenant</span><small>{tenant?.status ?? "loading"}</small></div>
+                <div className={styles.inspectGrid}>
+                  <span>Workspace</span><strong>{tenant?.workspaceName ?? "loading"}</strong>
+                  <span>Owner</span><strong>{tenant?.ownerName ?? "loading"}</strong>
+                  <span>Domain</span><strong>{tenant?.primaryDomain ?? "local"}</strong>
+                  <span>Plan</span><strong>{tenant?.plan ?? "Studio"}</strong>
+                </div>
+                <a className={styles.cookButton} href="/admin">Open tenant admin</a>
               </div>
               {publishResult ? <p className={styles.note}>{publishResult}</p> : null}
               {manifestError ? <p className={styles.errorText}>{manifestError}</p> : null}
