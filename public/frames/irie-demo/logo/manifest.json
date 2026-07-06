@@ -1,0 +1,23 @@
+{
+  "source": {
+    "filename": "/Users/irieagent/Downloads/Generated image 1 (18).png",
+    "duration": 8,
+    "resolution": "1536x1024",
+    "kind": "bitmap reference"
+  },
+  "frames": {
+    "target_count": 42,
+    "format": "webp",
+    "quality": 82
+  },
+  "recommended_scroll_height": "220vh",
+  "desktop": {
+    "resolution": "1600x900",
+    "actual_count": 42
+  },
+  "mobile": {
+    "resolution": "900x506",
+    "actual_count": 42
+  },
+  "created": "2026-07-06T08:54:58.807Z"
+}

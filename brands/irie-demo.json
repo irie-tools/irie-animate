@@ -1,0 +1,64 @@
+{
+  "id": "irie-demo",
+  "name": "Irie Animate",
+  "tagline": "Build the scroll site from a real reference scene, then replace it with brand clips.",
+  "cta": "Run local pipeline",
+  "logoText": "IA",
+  "motionTone": "Cinematic Luxe",
+  "demoSource": {
+    "imagePath": "/Users/irieagent/Downloads/Generated image 1 (18).png",
+    "crop": {
+      "left": 334,
+      "top": 118,
+      "width": 846,
+      "height": 530
+    }
+  },
+  "colors": {
+    "background": "#080a0c",
+    "surface": "#11151a",
+    "text": "#f3f6f8",
+    "muted": "#a7b0bb",
+    "accent": "#26d7ff",
+    "secondary": "#e9b85f"
+  },
+  "scenes": [
+    {
+      "id": "hero",
+      "title": "Essence hero",
+      "target": "hero",
+      "frames": 96,
+      "scrollRangeVh": 650,
+      "prompt": "Slow product reveal from a photoreal perfume reference scene."
+    },
+    {
+      "id": "gallery",
+      "title": "Bottle sweep",
+      "target": "gallery",
+      "frames": 56,
+      "scrollRangeVh": 380,
+      "prompt": "Closer product pass across bottle, rock, reflection, and warm gold title."
+    },
+    {
+      "id": "logo",
+      "title": "Title lockup",
+      "target": "footer",
+      "frames": 42,
+      "scrollRangeVh": 220,
+      "prompt": "Slow title lockup and product hold for footer or end card."
+    }
+  ],
+  "specs": [
+    { "label": "Frame engine", "value": "Canvas scrub" },
+    { "label": "Inputs", "value": "MP4 + brand JSON" },
+    { "label": "Default density", "value": "120 frames" },
+    { "label": "Deploy lane", "value": "Vercel preview" }
+  ],
+  "workflow": [
+    { "label": "Reference kit staged", "status": "ready" },
+    { "label": "Higgsfield clips generated", "status": "manual" },
+    { "label": "Frames optimized", "status": "ready" },
+    { "label": "Web vitals checked", "status": "ready" },
+    { "label": "Preview deployed", "status": "manual" }
+  ]
+}

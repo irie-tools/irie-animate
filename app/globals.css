@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ink: #080a0c;
+  --panel: #11151a;
+  --panel-2: #161b21;
+  --line: rgba(230, 238, 245, 0.12);
+  --line-strong: rgba(230, 238, 245, 0.22);
+  --text: #f3f6f8;
+  --muted: #a7b0bb;
+  --soft: #75808b;
+  --cyan: #26d7ff;
+  --amber: #e9b85f;
+  --violet: #8c6dff;
+  --green: #49e782;
+  --danger: #ff6f61;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--ink);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 68% 4%, rgba(38, 215, 255, 0.12), transparent 28rem),
+    radial-gradient(circle at 12% 82%, rgba(233, 184, 95, 0.08), transparent 26rem),
+    var(--ink);
+  color: var(--text);
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+::selection {
+  background: rgba(38, 215, 255, 0.28);
+}

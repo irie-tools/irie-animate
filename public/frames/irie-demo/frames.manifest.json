@@ -1,0 +1,55 @@
+{
+  "brandId": "irie-demo",
+  "generatedAt": "2026-07-06T08:54:58.819Z",
+  "scenes": [
+    {
+      "id": "hero",
+      "target": "hero",
+      "title": "Essence hero",
+      "frameCount": 96,
+      "framePattern": "/frames/irie-demo/hero/desktop/frame-{index}.webp",
+      "poster": "/frames/irie-demo/hero/desktop/frame-0001.webp",
+      "dimensions": {
+        "width": 1600,
+        "height": 900
+      },
+      "totalBytes": 6284824,
+      "totalMb": 5.99,
+      "source": "bitmap reference image"
+    },
+    {
+      "id": "gallery",
+      "target": "gallery",
+      "title": "Bottle sweep",
+      "frameCount": 56,
+      "framePattern": "/frames/irie-demo/gallery/desktop/frame-{index}.webp",
+      "poster": "/frames/irie-demo/gallery/desktop/frame-0001.webp",
+      "dimensions": {
+        "width": 1600,
+        "height": 900
+      },
+      "totalBytes": 3631010,
+      "totalMb": 3.46,
+      "source": "bitmap reference image"
+    },
+    {
+      "id": "logo",
+      "target": "footer",
+      "title": "Title lockup",
+      "frameCount": 42,
+      "framePattern": "/frames/irie-demo/logo/desktop/frame-{index}.webp",
+      "poster": "/frames/irie-demo/logo/desktop/frame-0001.webp",
+      "dimensions": {
+        "width": 1600,
+        "height": 900
+      },
+      "totalBytes": 2644498,
+      "totalMb": 2.52,
+      "source": "bitmap reference image"
+    }
+  ],
+  "budgets": {
+    "heroMaxMb": 10,
+    "totalMaxMb": 24
+  }
+}

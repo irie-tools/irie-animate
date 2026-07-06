@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+dist/
+exports/
+.irie-animate/
+.vercel/
+
+.DS_Store
+*.tsbuildinfo
+.qa-*.png
+.qa-*.json
+
+.env
+.env.*
+!.env.example
