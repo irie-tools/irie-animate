@@ -13,7 +13,8 @@ It is not a static screenshot mockup. The app keeps editable project state, rend
 - Undo/redo for project edits
 - Working far-left rail modes, settings, help, and collapse behavior
 - Logo/reference asset upload with local file storage
-- Project-driven frame generation through `POST /api/pipeline/demo`
+- Project-driven frame cooking through `POST /api/pipeline/cook`
+- A real Project Brain panel/API that scores engine readiness, names blockers, recommends next actions, auto-maps uploaded videos to scenes, and syncs checklist truth from project state
 - Project-driven static export through `POST /api/export`
 - Honest publish fallback that prepares an export package when Vercel is not connected
 
@@ -29,6 +30,8 @@ The animation engine is a frame-sequence engine:
 For a still reference image, the local generator uses `sharp` to create cinematic pan/zoom/light-shift frames. That produces real frame animation, but it is not AI video generation.
 
 For real MP4 clips, the pipeline can extract frames through `scripts/extract_frames.py` and `ffmpeg`, then optimize them for scroll playback.
+
+In the editor, uploaded MP4/MOV files become scene source assets. When a scene points at a video source, `POST /api/pipeline/cook` extracts frames from that footage. When no video source is mapped, the cook route deliberately falls back to the demo/reference generator so the preview remains usable.
 
 ## What Is Local-Only
 
@@ -47,13 +50,13 @@ Open `http://localhost:3000`.
 
 ## Rebuild Frames
 
-From the editor, use `Settings -> Rebuild frames`, or run:
+From the editor, use `Settings -> Rebuild frames`, the Inspect panel's `Cook frames`, or run:
 
 ```bash
-npm run pipeline:demo
+curl -X POST http://localhost:3000/api/pipeline/cook
 ```
 
-The current API-backed route writes a generated project brand config first, so editor state can feed the frame pipeline.
+The API-backed route writes a generated project brand config first, so editor state can feed the frame pipeline. The legacy `POST /api/pipeline/demo` route remains as a compatibility alias.
 
 ## Export
 
@@ -83,6 +86,8 @@ npm run build
 - `src/components/IrieAnimateApp.tsx` - editor UI and local interaction state
 - `src/lib/projectStore.ts` - file-backed local project store
 - `src/lib/projectBrand.ts` - maps editable project state into render/export brand config
+- `src/lib/projectBrain.ts` - deterministic project readiness, blocker, and next-action analyzer
+- `src/lib/projectPipeline.ts` - source-aware project cook runner
 - `pipeline/build-frames.mjs` - Sharp/ffmpeg-backed frame generation
 - `src/lib/exportSite.ts` - static scroll-site export
 - `app/api/**` - local project, asset, pipeline, export, and publish fallback APIs

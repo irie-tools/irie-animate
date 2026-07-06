@@ -24,6 +24,7 @@ export type EditorScene = {
   name: string;
   frameSceneId: string;
   target: string;
+  sourceAssetId?: string;
 };
 
 export type EditorProject = {
@@ -42,7 +43,7 @@ export type EditorProject = {
   };
   scenes: EditorScene[];
   timeline: TimelineTrack[];
-  assets: Array<{ id: string; name: string; type: string; size: number; path: string; addedAt: string; purpose?: "reference" | "logo" }>;
+  assets: Array<{ id: string; name: string; type: string; size: number; path: string; addedAt: string; purpose?: "reference" | "logo" | "source" }>;
   checklist: Array<{ label: string; done: boolean }>;
   vitals: Array<{ label: string; value: string; status: "Good" | "Watch" }>;
   updatedAt: string;
@@ -86,6 +87,10 @@ function normalizeProject(project: EditorProject): EditorProject {
       ...project.brand,
       logoText: project.brand?.logoText ?? "AURELIA"
     },
+    scenes: (project.scenes ?? []).map((scene) => ({
+      ...scene,
+      sourceAssetId: scene.sourceAssetId
+    })),
     assets: project.assets ?? [],
     checklist: project.checklist ?? [],
     vitals: project.vitals ?? []

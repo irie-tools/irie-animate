@@ -2,9 +2,12 @@
 
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   Box,
+  Brain,
   Check,
+  CheckCircle2,
   ChevronDown,
   Code2,
   Copy,
@@ -37,6 +40,8 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import brandConfig from "../../brands/irie-demo.json";
+import type { ProjectBrain } from "../lib/projectBrain";
+import { isVideoAsset } from "../lib/projectBrain";
 import type { EditorProject, TimelineTrack } from "../lib/projectStore";
 import type { BrandConfig, FramesManifest, SceneManifest } from "../lib/types";
 import styles from "./IrieAnimateApp.module.css";
@@ -53,6 +58,7 @@ const sideTabs = [
 const railTools = [
   { id: "layout", label: "Layout", Icon: LayoutPanelLeft },
   { id: "timeline", label: "Timeline", Icon: Film },
+  { id: "brain", label: "Brain", Icon: Brain },
   { id: "code", label: "Code", Icon: Code2 },
   { id: "analytics", label: "Analytics", Icon: BarChart3 }
 ];
@@ -66,8 +72,8 @@ const trackIcons = {
   sparkles: Sparkles
 };
 
-type RightTab = "pipeline" | "inspect" | "data" | "code";
-type RailMode = "layout" | "timeline" | "code" | "analytics";
+type RightTab = "pipeline" | "inspect" | "brain" | "data" | "code";
+type RailMode = "layout" | "timeline" | "brain" | "code" | "analytics";
 type TimelineView = "timeline" | "curve";
 
 export function IrieAnimateApp() {
@@ -78,6 +84,7 @@ export function IrieAnimateApp() {
   const loadedFrames = useRef<Map<string, Array<HTMLImageElement | undefined>>>(new Map());
   const [project, setProject] = useState<EditorProject | null>(null);
   const [manifest, setManifest] = useState<FramesManifest | null>(null);
+  const [brain, setBrain] = useState<ProjectBrain | null>(null);
   const [manifestError, setManifestError] = useState<string | null>(null);
   const [activeSceneId, setActiveSceneId] = useState("hero");
   const [activeRailMode, setActiveRailMode] = useState<RailMode>("layout");
@@ -128,6 +135,23 @@ export function IrieAnimateApp() {
     loadProject();
   }, [loadProject]);
 
+  const loadBrain = useCallback(async () => {
+    try {
+      const response = await fetch("/api/brain", { cache: "no-store" });
+      const payload = await response.json();
+      if (response.ok && payload.ok) {
+        setBrain(payload.brain as ProjectBrain);
+      }
+    } catch {
+      setBrain(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!project) return;
+    void loadBrain();
+  }, [loadBrain, manifest, project]);
+
   const saveProject = useCallback(async (patch: Partial<EditorProject>, options: { recordHistory?: boolean } = {}) => {
     if (project && options.recordHistory !== false) {
       setUndoStack((stack) => [...stack.slice(-24), project]);
@@ -144,9 +168,10 @@ export function IrieAnimateApp() {
       return null;
     }
     setProject(payload.project as EditorProject);
+    void loadBrain();
     setToast("Project saved.");
     return payload.project as EditorProject;
-  }, [project]);
+  }, [loadBrain, project]);
 
   const restoreProject = useCallback(async (snapshot: EditorProject) => {
     const response = await fetch("/api/projects/irie-demo", {
@@ -161,9 +186,10 @@ export function IrieAnimateApp() {
     }
     setProject(payload.project as EditorProject);
     setActiveSceneId(payload.project.activeSceneId);
+    void loadBrain();
     setToast("Project restored.");
     return payload.project as EditorProject;
-  }, []);
+  }, [loadBrain]);
 
   const undoProject = useCallback(async () => {
     if (!project || !undoStack.length) return;
@@ -196,6 +222,12 @@ export function IrieAnimateApp() {
   const logoAsset = useMemo(() => {
     return project?.assets.find((asset) => asset.id === project.brand.logoAssetId) ?? null;
   }, [project]);
+
+  const videoAssets = useMemo(() => (project?.assets ?? []).filter(isVideoAsset), [project]);
+
+  const activeSourceAsset = useMemo(() => {
+    return currentEditorScene?.sourceAssetId ? project?.assets.find((asset) => asset.id === currentEditorScene.sourceAssetId) ?? null : null;
+  }, [currentEditorScene, project]);
 
   useEffect(() => {
     if (!activeScene) return;
@@ -320,7 +352,7 @@ export function IrieAnimateApp() {
     setManifestError(null);
     setToast("Cooking frame sequence...");
     try {
-      const response = await fetch("/api/pipeline/demo", { method: "POST" });
+      const response = await fetch("/api/pipeline/cook", { method: "POST" });
       const payload = await response.json();
       if (!response.ok || !payload.ok) {
         throw new Error(payload.error || "Pipeline failed.");
@@ -331,14 +363,15 @@ export function IrieAnimateApp() {
       setScrub(0);
       setFrameLoadProgress(0);
       setLastRunAt(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
-      setToast("Frame sequence rebuilt from bitmap reference.");
+      void loadBrain();
+      setToast(payload.mode === "video-source" ? "Frame sequence rebuilt from scene video source." : "Frame sequence rebuilt from demo/reference engine.");
     } catch (error) {
       setManifestError(error instanceof Error ? error.message : "Pipeline failed.");
       setToast("Pipeline needs attention.");
     } finally {
       setIsGenerating(false);
     }
-  }, []);
+  }, [loadBrain]);
 
   const exportSite = useCallback(async () => {
     setToast("Exporting static package...");
@@ -386,8 +419,9 @@ export function IrieAnimateApp() {
       return;
     }
     setProject(payload.project as EditorProject);
+    void loadBrain();
     setToast(purpose === "logo" ? "Logo asset saved and assigned." : `${payload.assets.length} asset(s) saved locally.`);
-  }, []);
+  }, [loadBrain]);
 
   const activateRailMode = useCallback((mode: RailMode) => {
     setActiveRailMode(mode);
@@ -400,6 +434,8 @@ export function IrieAnimateApp() {
       setLeftCollapsed(false);
     } else if (mode === "code") {
       setActiveRightTab("code");
+    } else if (mode === "brain") {
+      setActiveRightTab("brain");
     } else {
       setActiveRightTab("pipeline");
     }
@@ -433,6 +469,30 @@ export function IrieAnimateApp() {
     setProject({ ...project, scenes });
     void saveProject({ scenes });
   }, [project, saveProject]);
+
+  const updateScene = useCallback((sceneId: string, patch: Partial<EditorProject["scenes"][number]>) => {
+    if (!project) return;
+    const scenes = project.scenes.map((scene) => scene.id === sceneId ? { ...scene, ...patch } : scene);
+    setProject({ ...project, scenes });
+    void saveProject({ scenes });
+  }, [project, saveProject]);
+
+  const runBrainAction = useCallback(async (action: "auto-map-sources" | "apply-checklist") => {
+    setToast(action === "auto-map-sources" ? "Brain is mapping video sources..." : "Brain is syncing checklist truth...");
+    const response = await fetch("/api/brain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action })
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      setToast(payload.error || "Brain action failed.");
+      return;
+    }
+    setProject(payload.project as EditorProject);
+    setBrain(payload.brain as ProjectBrain);
+    setToast(action === "auto-map-sources" ? "Video sources mapped to scenes." : "Checklist synced from engine state.");
+  }, []);
 
   const addScene = useCallback(() => {
     if (!project) return;
@@ -494,7 +554,7 @@ export function IrieAnimateApp() {
   const otherMs = Number(Math.max(3.1, 24.3 - scriptMs - layoutMs - paintMs).toFixed(1));
   const frameBudgetMs = Number((scriptMs + layoutMs + paintMs + otherMs).toFixed(1));
   const budgetRatio = Math.min(100, Math.round((frameBudgetMs / 33.3) * 100));
-  const codeSnippet = `# Build from the live local project state\ncurl -X POST http://localhost:3000/api/pipeline/demo\ncurl -X POST http://localhost:3000/api/export\n\n# CLI fallback still exists for static brand JSON\nnpm run pipeline -- --brand ${project?.brandId ?? brand.id}\n# frames -> public/frames/${project?.brandId ?? brand.id}/`;
+  const codeSnippet = `# Build from the live local project state\n# Uses assigned video sources when scenes point at MP4/MOV assets.\ncurl -X POST http://localhost:3000/api/pipeline/cook\ncurl -X POST http://localhost:3000/api/export\n\n# CLI fallback still exists for static brand JSON\nnpm run pipeline -- --brand ${project?.brandId ?? brand.id}\n# frames -> public/frames/${project?.brandId ?? brand.id}/`;
   const completedChecklist = project?.checklist.filter((item) => item.done).length ?? 0;
   const pipelineSteps = [
     { label: "Ingest", done: Boolean(project) },
@@ -674,28 +734,37 @@ export function IrieAnimateApp() {
                   <input value={scene.name} onChange={(event) => updateSceneName(scene.id, event.target.value)} />
                   <select
                     value={scene.frameSceneId}
-                    onChange={(event) => {
-                      if (!project) return;
-                      const scenes = project.scenes.map((item) => item.id === scene.id ? { ...item, frameSceneId: event.target.value } : item);
-                      setProject({ ...project, scenes });
-                      void saveProject({ scenes });
-                    }}
+                    onChange={(event) => updateScene(scene.id, { frameSceneId: event.target.value })}
                   >
                     {(manifest?.scenes ?? []).map((frameScene) => <option key={frameScene.id} value={frameScene.id}>{frameScene.title}</option>)}
                   </select>
+                  <select
+                    value={scene.sourceAssetId ?? ""}
+                    onChange={(event) => updateScene(scene.id, { sourceAssetId: event.target.value || undefined })}
+                    aria-label={`${scene.name} source asset`}
+                  >
+                    <option value="">Demo/reference engine</option>
+                    {videoAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
+                  </select>
                 </label>
               ))}
+              <p className={styles.note}>Scene source selects decide whether Cook Frames extracts from uploaded video or uses the demo/reference generator.</p>
               <button className={styles.addScene} onClick={addScene}><Plus size={15} /> Add Scene</button>
             </section>
           ) : activeSideTab === "assets" ? (
             <section className={styles.placeholderPanel}>
               <div className={styles.panelTitle}><span>Assets</span></div>
-              <p>{project?.assets.length ?? 0} saved local asset(s). {referenceCount ? `${referenceCount} added this session.` : ""}</p>
+              <p>{project?.assets.length ?? 0} saved local asset(s), including {videoAssets.length} cookable video source(s). {referenceCount ? `${referenceCount} added this session.` : ""}</p>
               {(project?.assets ?? []).map((asset) => (
                 <div className={styles.assetRow} key={asset.id}>
-                  <strong>{asset.name}</strong>
+                  <div>
+                    <strong>{asset.name}</strong>
+                    <small>{asset.purpose || "reference"} · {asset.type || "file"}</small>
+                  </div>
                   <span>{formatBytes(asset.size)}</span>
-                  <small>{asset.type || "file"}</small>
+                  {isVideoAsset(asset) && currentEditorScene ? (
+                    <button className={styles.assetAction} onClick={() => updateScene(currentEditorScene.id, { sourceAssetId: asset.id })}>Use</button>
+                  ) : null}
                 </div>
               ))}
               {(manifest?.scenes ?? []).map((scene) => (
@@ -708,7 +777,7 @@ export function IrieAnimateApp() {
               <button className={styles.addScene} onClick={() => {
                 uploadPurposeRef.current = "reference";
                 fileInputRef.current?.click();
-              }}><Upload size={15} /> Add files</button>
+              }}><Upload size={15} /> Add reference/video files</button>
             </section>
           ) : (
             <section className={styles.placeholderPanel}>
@@ -726,6 +795,7 @@ export function IrieAnimateApp() {
                 void saveProject({ version: event.target.value });
               }} />
               <button className={styles.addScene} onClick={runDemoPipeline}><Sparkles size={15} /> Rebuild frames</button>
+              <button className={styles.addScene} onClick={() => runBrainAction("apply-checklist")}><Brain size={15} /> Sync checklist truth</button>
             </section>
           )}
         </aside>
@@ -859,7 +929,7 @@ export function IrieAnimateApp() {
 
         <aside className={styles.rightPanel}>
           <nav className={styles.rightTabs}>
-            {(["pipeline", "inspect", "data", "code"] as RightTab[]).map((tab) => (
+            {(["pipeline", "inspect", "brain", "data", "code"] as RightTab[]).map((tab) => (
               <button key={tab} className={activeRightTab === tab ? styles.rightTabActive : styles.rightTab} onClick={() => setActiveRightTab(tab)}>
                 {tab[0].toUpperCase() + tab.slice(1)}
               </button>
@@ -927,6 +997,7 @@ export function IrieAnimateApp() {
                   <span>Current frame</span><strong>{activeFrame}</strong>
                   <span>Frame count</span><strong>{activeScene?.frameCount ?? 0}</strong>
                   <span>Source</span><strong>{activeScene?.source ?? "missing"}</strong>
+                  <span>Assigned asset</span><strong>{activeSourceAsset?.name ?? "demo/reference"}</strong>
                   <span>Hero MB</span><strong>{heroMb.toFixed(2)}</strong>
                   <span>Loaded</span><strong>{Math.round(frameLoadProgress * 100)}%</strong>
                   <span>Last draw</span><strong>{drawMs.toFixed(2)}ms</strong>
@@ -980,9 +1051,68 @@ export function IrieAnimateApp() {
             </div>
           ) : null}
 
+          {activeRightTab === "brain" ? (
+            <div className={styles.rightContent}>
+              <div className={styles.brainHero}>
+                <div>
+                  <span>Project Brain</span>
+                  <strong>{brain?.score ?? 0}%</strong>
+                  <small>{brain?.engineMode.replace("-", " ") ?? "loading"}</small>
+                </div>
+                <Brain size={34} />
+              </div>
+              <p className={styles.brainSummary}>{brain?.summary ?? "Reading project state..."}</p>
+              <div className={styles.brainStats}>
+                <span><strong>{brain?.stats.videos ?? 0}</strong> Videos</span>
+                <span><strong>{brain?.stats.mappedSources ?? 0}</strong> Mapped</span>
+                <span><strong>{brain?.stats.renderedFrames ?? 0}</strong> Frames</span>
+                <span><strong>{brain?.stats.totalMb ?? 0}</strong> MB</span>
+              </div>
+              <button className={styles.cookButton} onClick={() => runBrainAction("auto-map-sources")} disabled={!videoAssets.length}>
+                <Brain size={14} /> Auto-map video sources
+              </button>
+              <button className={styles.deployButton} onClick={() => runBrainAction("apply-checklist")}>
+                <CheckCircle2 size={14} /> Sync checklist truth
+              </button>
+              <div className={styles.metricBlock}>
+                <div className={styles.metricTitle}><span>Next Best Actions</span><small>{brain?.nextActions.length ?? 0}</small></div>
+                {(brain?.nextActions ?? []).map((action) => (
+                  <div className={styles.brainAction} key={action}><Sparkles size={13} /><span>{action}</span></div>
+                ))}
+              </div>
+              <div className={styles.metricBlock}>
+                <div className={styles.metricTitle}><span>Blockers</span><small>{brain?.blockers.length ?? 0}</small></div>
+                {(brain?.blockers.length ? brain.blockers : [{ label: "No hard blockers", detail: "The app can cook or export from the current local state.", severity: "good" as const }]).map((issue) => (
+                  <div className={styles.brainIssue} key={`${issue.label}-${issue.detail}`}>
+                    {issue.severity === "blocked" ? <AlertTriangle size={14} /> : <Check size={14} />}
+                    <div><strong>{issue.label}</strong><span>{issue.detail}</span></div>
+                  </div>
+                ))}
+              </div>
+              <div className={styles.metricBlock}>
+                <div className={styles.metricTitle}><span>Recommendations</span><small>{brain?.recommendations.length ?? 0}</small></div>
+                {(brain?.recommendations ?? []).map((issue) => (
+                  <div className={styles.brainIssue} key={`${issue.label}-${issue.detail}`}>
+                    <Activity size={14} />
+                    <div><strong>{issue.label}</strong><span>{issue.detail}</span></div>
+                  </div>
+                ))}
+              </div>
+              <div className={styles.metricBlock}>
+                <div className={styles.metricTitle}><span>Strengths</span><small>{brain?.strengths.length ?? 0}</small></div>
+                {(brain?.strengths ?? []).map((issue) => (
+                  <div className={styles.brainIssue} key={`${issue.label}-${issue.detail}`}>
+                    <CheckCircle2 size={14} />
+                    <div><strong>{issue.label}</strong><span>{issue.detail}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {activeRightTab === "data" ? (
             <div className={styles.rightContent}>
-              <pre className={styles.dataBlock}>{JSON.stringify({ project, manifest }, null, 2)}</pre>
+              <pre className={styles.dataBlock}>{JSON.stringify({ project, manifest, brain }, null, 2)}</pre>
             </div>
           ) : null}
 

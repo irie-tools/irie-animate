@@ -1,4 +1,5 @@
 import baseBrand from "../../brands/irie-demo.json";
+import { isVideoAsset } from "./projectBrain";
 import type { BrandConfig, BrandScene, SceneTarget } from "./types";
 import type { EditorProject } from "./projectStore";
 
@@ -7,10 +8,13 @@ const base = baseBrand as BrandConfig;
 export function buildBrandConfigFromProject(project: EditorProject): BrandConfig {
   const scenes = base.scenes.map((scene) => {
     const editorScene = project.scenes.find((item) => item.frameSceneId === scene.id);
+    const sourceAsset = editorScene?.sourceAssetId ? project.assets.find((asset) => asset.id === editorScene.sourceAssetId) : null;
+    const sourceVideo = sourceAsset && isVideoAsset(sourceAsset) ? sourceAsset.path : undefined;
     return {
       ...scene,
       title: editorScene?.name || scene.title,
-      target: normalizeTarget(editorScene?.target || scene.target)
+      target: normalizeTarget(editorScene?.target || scene.target),
+      sourceVideo
     };
   });
 
@@ -33,6 +37,7 @@ export function buildBrandConfigFromProject(project: EditorProject): BrandConfig
     specs: [
       { label: "Frame engine", value: "Canvas frame scrub" },
       { label: "Project scenes", value: `${project.scenes.length}` },
+      { label: "Mapped videos", value: `${project.scenes.filter((scene) => scene.sourceAssetId).length}` },
       { label: "Timeline tracks", value: `${project.timeline.length}` },
       { label: "Export source", value: "Local project JSON" }
     ],
