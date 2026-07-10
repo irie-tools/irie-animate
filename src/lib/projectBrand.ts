@@ -1,5 +1,4 @@
 import baseBrand from "../../brands/irie-demo.json";
-import { isVideoAsset } from "./projectBrain";
 import type { BrandConfig, BrandScene, SceneTarget } from "./types";
 import type { EditorProject } from "./projectStore";
 
@@ -60,4 +59,8 @@ function getColor(project: EditorProject, name: string, index: number, fallback:
 function normalizeTarget(target: string): SceneTarget {
   if (target === "hero" || target === "gallery" || target === "specs" || target === "footer") return target;
   return "hero";
+}
+
+function isVideoAsset(asset: { name: string; type: string }) {
+  return asset.type.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/i.test(asset.name);
 }
