@@ -1,7 +1,7 @@
-import { GuidedBuilder } from "@/src/components/GuidedBuilder";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default function CreatePage() {
-  return <GuidedBuilder />;
+  redirect("/");
 }

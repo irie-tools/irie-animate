@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Irie Animate",
-  description: "Config-driven scroll animation builder for Irie brand sites."
+  description: "Turn a storefront into an animated website."
 };
 
 export default function RootLayout({

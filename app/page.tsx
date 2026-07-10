@@ -1,7 +1,7 @@
-import { LandingPage } from "@/src/components/LandingPage";
+import { GuidedBuilder } from "@/src/components/GuidedBuilder";
 
 export const dynamic = "force-dynamic";
 
 export default function Home() {
-  return <LandingPage />;
+  return <GuidedBuilder />;
 }

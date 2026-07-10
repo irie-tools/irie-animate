@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 export type TimelineClip = {
@@ -93,11 +93,6 @@ export type EditorProject = {
   updatedAt: string;
 };
 
-export type ProjectSummary = Pick<EditorProject, "id" | "name" | "brandId" | "updatedAt"> & {
-  status: "draft" | "ready";
-  sourceUrl?: string;
-};
-
 const DEFAULT_PROJECT_ID = "irie-demo";
 const projectsRoot = resolve(process.cwd(), ".irie-animate", "projects");
 
@@ -107,27 +102,6 @@ export function getProjectDir(projectId: string) {
 
 export function projectExists(projectId: string) {
   return existsSync(resolve(getProjectDir(projectId), "project.json"));
-}
-
-export async function listProjects(): Promise<ProjectSummary[]> {
-  await ensureDefaultProject();
-  const entries = await readdir(projectsRoot, { withFileTypes: true });
-  const projects = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry): Promise<ProjectSummary | null> => {
-    try {
-      const project = await readProject(entry.name);
-      return {
-        id: project.id,
-        name: project.name,
-        brandId: project.brandId,
-        updatedAt: project.updatedAt,
-        status: project.generated?.exportDir ? "ready" as const : "draft" as const,
-        ...(project.intake?.sourceUrl ? { sourceUrl: project.intake.sourceUrl } : {})
-      };
-    } catch {
-      return null;
-    }
-  }));
-  return projects.filter((project): project is ProjectSummary => Boolean(project)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export async function readProject(projectId = DEFAULT_PROJECT_ID): Promise<EditorProject> {
@@ -145,11 +119,7 @@ export async function createProject(input: { id: string; name: string; intake?: 
   return project;
 }
 
-export async function updateProject(projectId: string, patch: Partial<EditorProject>): Promise<EditorProject>;
-export async function updateProject(patch: Partial<EditorProject>): Promise<EditorProject>;
-export async function updateProject(projectIdOrPatch: string | Partial<EditorProject>, maybePatch?: Partial<EditorProject>): Promise<EditorProject> {
-  const projectId = typeof projectIdOrPatch === "string" ? projectIdOrPatch : DEFAULT_PROJECT_ID;
-  const patch = typeof projectIdOrPatch === "string" ? (maybePatch ?? {}) : projectIdOrPatch;
+export async function updateProject(projectId: string, patch: Partial<EditorProject>): Promise<EditorProject> {
   const current = await readProject(projectId);
   const next = mergeProject(current, patch);
   await writeProject(next);
