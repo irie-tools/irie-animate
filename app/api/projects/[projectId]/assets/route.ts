@@ -2,14 +2,18 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { NextResponse } from "next/server";
 import { isVideoAsset } from "@/src/lib/projectBrain";
-import { readProject, updateProject, type EditorProject } from "../../../../../src/lib/projectStore";
+import { getProjectDir, projectExists, readProject, updateProject, type EditorProject } from "../../../../../src/lib/projectStore";
 
-const assetsDir = resolve(process.cwd(), ".irie-animate", "projects", "irie-demo", "assets");
 type ProjectAsset = EditorProject["assets"][number];
 type AssetPurpose = NonNullable<ProjectAsset["purpose"]>;
 
-export async function POST(request: Request) {
+type Params = { params: Promise<{ projectId: string }> };
+
+export async function POST(request: Request, { params }: Params) {
   try {
+    const { projectId } = await params;
+    if (!projectExists(projectId)) return NextResponse.json({ ok: false, error: "Project not found." }, { status: 404 });
+    const assetsDir = resolve(getProjectDir(projectId), "assets");
     const formData = await request.formData();
     const files = formData.getAll("files").filter((item): item is File => item instanceof File);
     const requestedPurpose: AssetPurpose = formData.get("purpose") === "logo" ? "logo" : "reference";
@@ -19,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     await mkdir(assetsDir, { recursive: true });
-    const current = await readProject();
+    const current = await readProject(projectId);
     const savedAssets: ProjectAsset[] = [];
 
     for (const file of files) {
@@ -40,7 +44,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const project = await updateProject({
+    const project = await updateProject(projectId, {
       assets: [...(current.assets ?? []), ...savedAssets],
       brand: requestedPurpose === "logo" ? { ...current.brand, logoAssetId: savedAssets[0]?.id } : current.brand
     });

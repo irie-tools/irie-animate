@@ -24,7 +24,7 @@ export async function LandingPage() {
         <div className={styles.navLinks}>
           <a href="#how">How it works</a>
           <Link href="/admin">Tenant Admin</Link>
-          <Link className={styles.primaryLink} href="/studio">Open Studio <ArrowRight size={15} /></Link>
+          <Link className={styles.primaryLink} href="/create">Create a site <ArrowRight size={15} /></Link>
         </div>
       </nav>
 
@@ -36,7 +36,7 @@ export async function LandingPage() {
             cooking optimized frame sequences, and exporting scroll-driven animated sites.
           </p>
           <div className={styles.heroActions}>
-            <Link className={styles.primaryLink} href="/studio"><Sparkles size={15} /> Start building</Link>
+            <Link className={styles.primaryLink} href="/create"><Sparkles size={15} /> Start with a storefront</Link>
             <Link className={styles.secondaryLink} href="/admin"><KeyRound size={15} /> Admin back door</Link>
           </div>
           <div className={styles.proofStrip}>
