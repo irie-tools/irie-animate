@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Download, ExternalLink, LoaderCircle } from "lucide-react";
+import { Check, Download, ExternalLink, ImageOff, LoaderCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { EditorProject, MotionIntensity, StorefrontIntake } from "@/src/lib/projectStore";
 import styles from "./GuidedBuilder.module.css";
@@ -23,7 +23,9 @@ export function GuidedBuilder() {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
-  const visibleProducts = useMemo(() => intake?.products.filter((product) => !failedImages.includes(product.id)).slice(0, 18) ?? [], [failedImages, intake]);
+  const failedImageSet = useMemo(() => new Set(failedImages), [failedImages]);
+  const visibleProducts = intake?.products.slice(0, 18) ?? [];
+  const currentStep = ready || busy === "generate" ? 4 : project ? 2 : 1;
 
   async function importSite() {
     if (!url.trim()) return;
@@ -56,7 +58,6 @@ export function GuidedBuilder() {
 
   function removeBrokenProduct(id: string) {
     setFailedImages((current) => current.includes(id) ? current : [...current, id]);
-    setSelected((current) => current.filter((item) => item !== id));
   }
 
   async function generate() {
@@ -105,6 +106,18 @@ export function GuidedBuilder() {
       </header>
 
       <div className={styles.content}>
+        <nav className={styles.progress} aria-label="Build progress">
+          {["Import store", "Choose products", "Choose motion", "Preview & download"].map((label, index) => {
+            const step = index + 1;
+            const complete = step < currentStep;
+            const active = step === currentStep;
+            return <div key={label} className={active ? styles.progressActive : complete ? styles.progressComplete : ""}>
+              <span>{complete ? <Check /> : step}</span>
+              <strong>{label}</strong>
+            </div>;
+          })}
+        </nav>
+
         {!project && (
           <section className={styles.start}>
             <h1>Enter your storefront.</h1>
@@ -124,24 +137,38 @@ export function GuidedBuilder() {
 
         {project && !ready && (
           <div className={styles.setup}>
+            <div className={styles.importedStore}>
+              <div><span>Imported store</span><strong>{intake?.brandName || project.name}</strong></div>
+              <button type="button" onClick={startOver}>Change store</button>
+            </div>
             <section>
               <div className={styles.sectionHeading}>
-                <div><span>1</span><h2>Choose products</h2></div>
+                <div><span>2</span><h2>Choose products</h2></div>
                 <p>{selected.length} of 6 selected</p>
               </div>
-              <div className={styles.products}>
-                {visibleProducts.map((product) => (
-                  <button type="button" className={selectedSet.has(product.id) ? styles.selected : ""} onClick={() => toggleProduct(product.id)} key={product.id}>
-                    <div><img src={product.imageUrl} alt={product.name} onError={() => removeBrokenProduct(product.id)} />{selectedSet.has(product.id) && <i><Check /></i>}</div>
+              {visibleProducts.length ? <div className={styles.products}>
+                {visibleProducts.map((product) => {
+                  const imageFailed = failedImageSet.has(product.id);
+                  return <button type="button" className={selectedSet.has(product.id) ? styles.selected : ""} onClick={() => toggleProduct(product.id)} key={product.id}>
+                    <div className={styles.productMedia}>
+                      {imageFailed
+                        ? <span className={styles.imageFallback}><ImageOff /><small>Image unavailable</small></span>
+                        : <img src={product.imageUrl} alt={product.name} onError={() => removeBrokenProduct(product.id)} />}
+                      {selectedSet.has(product.id) && <i><Check /></i>}
+                    </div>
                     <strong>{product.name}</strong>
                     <span>{product.price || "Product"}</span>
-                  </button>
-                ))}
-              </div>
+                  </button>;
+                })}
+              </div> : <div className={styles.emptyProducts}>
+                <strong>No products were found.</strong>
+                <p>Try another storefront URL or confirm the store has a public shop page.</p>
+                <button type="button" onClick={startOver}>Try another store</button>
+              </div>}
             </section>
 
             <section className={styles.motionSection}>
-              <div className={styles.sectionHeading}><div><span>2</span><h2>Choose motion</h2></div></div>
+              <div className={styles.sectionHeading}><div><span>3</span><h2>Choose motion</h2></div></div>
               <div className={styles.motionOptions}>
                 {motionOptions.map((option) => (
                   <button type="button" key={option.value} className={intensity === option.value ? styles.activeMotion : ""} onClick={() => setIntensity(option.value)}>
