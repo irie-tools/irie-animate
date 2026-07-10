@@ -146,7 +146,7 @@ export type EditorProject = {
   };
   scenes: EditorScene[];
   timeline: TimelineTrack[];
-  assets: Array<{ id: string; name: string; type: string; size: number; path: string; addedAt: string; purpose?: "reference" | "logo" | "source" }>;
+  assets: Array<{ id: string; name: string; type: string; size: number; path: string; addedAt: string; purpose?: "reference" | "logo" | "source" | "generated" }>;
   checklist: Array<{ label: string; done: boolean }>;
   vitals: Array<{ label: string; value: string; status: "Good" | "Watch" }>;
   intake?: StorefrontIntake;

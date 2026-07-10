@@ -23,10 +23,12 @@ export function GuidedBuilder() {
   const [busy, setBusy] = useState<"import" | "generate" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [motionProof, setMotionProof] = useState<{ imageCount: number; localVideo: boolean; apiCalls: number } | null>(null);
+  const [motionProof, setMotionProof] = useState<{ imageCount: number; sourceImageCount: number; generatedImageCount: number; localVideo: boolean; apiCalls: number } | null>(null);
   const sectionSet = useMemo(() => new Set(selectedSections), [selectedSections]);
   const productSet = useMemo(() => new Set(selectedProducts), [selectedProducts]);
   const failedImageSet = useMemo(() => new Set(failedImages), [failedImages]);
+  const visualImageCount = intake ? new Set([...intake.media.map((media) => media.url), ...intake.products.map((product) => product.imageUrl)].filter(Boolean)).size : 0;
+  const needsVisualRescue = Boolean(intake && visualImageCount < 4);
   const currentStep = ready || busy === "generate" ? 4 : project ? 2 : 1;
 
   async function analyzeWebsite() {
@@ -128,11 +130,12 @@ export function GuidedBuilder() {
         <div className={styles.importedStore}><div><span>Analyzed website</span><strong>{intake.brandName}</strong><small>{intake.siteKind} · {intake.pages.length} pages · {intake.media.length} images{intake.hasCommerce ? " · shop detected" : ""}</small></div><button type="button" onClick={startOver}>Change website</button></div>
 
         <section><div className={styles.sectionHeading}><div><span>2</span><h2>Choose sections</h2></div><p>{selectedSections.length} of 6 selected</p></div>
+          {needsVisualRescue && <div className={styles.visualRescue}><Sparkles/><div><strong>{visualImageCount ? `Only ${visualImageCount} usable ${visualImageCount === 1 ? "image" : "images"} found. Handled.` : "No usable images found. Handled."}</strong><p>Irie Animate will create branded editorial scenes from the site colors, copy, and selected sections, then turn those scenes into the motion film.</p></div><span>Automatic</span></div>}
           <div className={styles.sectionGrid}>{intake.sections.slice(0, 18).map((section, index) => {
             const imageUrl = section.imageUrls[0] || intake.media[index % Math.max(1, intake.media.length)]?.url;
             const imageFailed = imageUrl ? failedImageSet.has(imageUrl) : true;
             return <button type="button" className={sectionSet.has(section.id) ? styles.selected : ""} onClick={() => toggleSection(section.id)} key={section.id}>
-              <div className={styles.sectionMedia}>{imageUrl && !imageFailed ? <img src={imageUrl} alt="" onError={() => setFailedImages((current) => current.includes(imageUrl) ? current : [...current, imageUrl])}/> : <span><ImageOff/><small>{section.kind}</small></span>}{sectionSet.has(section.id) && <i><Check/></i>}</div>
+              <div className={styles.sectionMedia}>{imageUrl && !imageFailed ? <img src={imageUrl} alt="" onError={() => setFailedImages((current) => current.includes(imageUrl) ? current : [...current, imageUrl])}/> : <span className={needsVisualRescue ? styles.scenePlanned : ""}>{needsVisualRescue ? <Sparkles/> : <ImageOff/>}<small>{needsVisualRescue ? "Scene will be created" : section.kind}</small></span>}{sectionSet.has(section.id) && <i><Check/></i>}</div>
               <span className={styles.kind}>{section.kind}</span><strong>{section.heading}</strong><p>{section.summary}</p>
             </button>;
           })}</div>
@@ -141,12 +144,12 @@ export function GuidedBuilder() {
         {intake.hasCommerce && intake.products.length > 0 && <details className={styles.commerceOptions}><summary><span><ShoppingBag/> Shop detected</span><small>Optional: choose products to restyle inside the generated website</small></summary><div className={styles.products}>{intake.products.slice(0, 12).map((product) => <button type="button" className={productSet.has(product.id) ? styles.selected : ""} onClick={() => toggleProduct(product.id)} key={product.id}><img src={product.imageUrl} alt={product.name}/><strong>{product.name}</strong><span>{product.price}</span>{productSet.has(product.id) && <i><Check/></i>}</button>)}</div></details>}
 
         <section className={styles.motionSection}><div className={styles.sectionHeading}><div><span>3</span><h2>Choose motion</h2></div></div><div className={styles.motionOptions}>{motionOptions.map((option) => <button type="button" key={option.value} className={intensity === option.value ? styles.activeMotion : ""} onClick={() => setIntensity(option.value)}><strong>{option.label}</strong><span>{option.description}</span></button>)}</div>
-          <div className={styles.included}><strong>Included automatically</strong><span>Local image-sequenced MP4</span><span>Scroll-scrub WebP frames</span><span>Metadata + JSON-LD</span><span>FAQ + llms.txt</span><span>robots.txt + sitemap</span><span>Agent action manifest</span></div>
-          <button className={styles.generate} onClick={generate} disabled={!selectedSections.length || Boolean(busy)}>{busy === "generate" && <LoaderCircle className={styles.spin}/>} {busy === "generate" ? "Piecing images into motion…" : "Build animated website"}</button>{busy === "generate" && <p className={styles.waitNote}>No Higgsfield or animation API. Your Mac is building the film, frames, website, and search package locally.</p>}
+          <div className={styles.included}><strong>Included automatically</strong><span>Missing-image rescue</span><span>Local image-sequenced MP4</span><span>Scroll-scrub WebP frames</span><span>Metadata + JSON-LD</span><span>FAQ + llms.txt</span><span>robots.txt + sitemap</span><span>Agent action manifest</span></div>
+          <button className={styles.generate} onClick={generate} disabled={!selectedSections.length || Boolean(busy)}>{busy === "generate" && <LoaderCircle className={styles.spin}/>} {busy === "generate" ? needsVisualRescue ? "Creating visuals and motion…" : "Piecing images into motion…" : "Build animated website"}</button>{busy === "generate" && <p className={styles.waitNote}>{needsVisualRescue ? "Creating branded scenes first, then building the film, frames, website, and search package locally." : "No Higgsfield or animation API. Your Mac is building the film, frames, website, and search package locally."}</p>}
         </section>
       </div>}
 
-      {ready && project && <section className={styles.done}><div className={styles.doneMark}><Check/></div><h1>Your animated website is ready.</h1><p>{motionProof ? `Built locally from ${motionProof.imageCount} images with ${motionProof.apiCalls} animation API calls.` : "Built locally from the website’s own images."}</p><div className={styles.actions}><Link className={styles.primaryAction} href={`/preview/${project.id}`} target="_blank">Preview in iframe <ExternalLink/></Link><a className={styles.secondaryAction} href={`/api/projects/${encodeURIComponent(project.id)}/download`}>Download website <Download/></a><button type="button" onClick={startOver}>Transform another</button></div></section>}
+      {ready && project && <section className={styles.done}><div className={styles.doneMark}><Check/></div><h1>Your animated website is ready.</h1><p>{motionProof ? motionProof.generatedImageCount ? `Built locally with ${motionProof.sourceImageCount} source images and ${motionProof.generatedImageCount} created brand scenes. ${motionProof.apiCalls} animation API calls.` : `Built locally from ${motionProof.sourceImageCount} source images with ${motionProof.apiCalls} animation API calls.` : "Built locally from the website’s own images."}</p><div className={styles.actions}><Link className={styles.primaryAction} href={`/preview/${project.id}`} target="_blank">Preview in iframe <ExternalLink/></Link><a className={styles.secondaryAction} href={`/api/projects/${encodeURIComponent(project.id)}/download`}>Download website <Download/></a><button type="button" onClick={startOver}>Transform another</button></div></section>}
       {error && <p className={styles.error}>{error}</p>}
     </div>
   </main>;

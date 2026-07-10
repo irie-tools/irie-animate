@@ -4,7 +4,7 @@ import { copyFile, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises"
 import { extname, resolve } from "node:path";
 import sharp from "sharp";
 import { exportStaticSite } from "./exportSite";
-import { getProjectDir, readProject, updateProject, type EditorProject, type MotionRecipe } from "./projectStore";
+import { getProjectDir, readProject, updateProject, type EditorProject, type MotionRecipe, type WebsiteSection } from "./projectStore";
 import type { FramesManifest } from "./types";
 
 type ProjectAsset = EditorProject["assets"][number];
@@ -36,7 +36,6 @@ export async function generateExperience(projectId: string, recipePatch: Partial
     ...project.intake.media.map((media) => media.url)
   ])].slice(0, 10);
   if (!selectedSections.length) throw new Error("Select at least one website section.");
-  if (!imageUrls.length) throw new Error("This website did not expose any usable images for local motion generation.");
 
   const assetsDir = resolve(getProjectDir(projectId), "assets");
   await mkdir(assetsDir, { recursive: true });
@@ -44,23 +43,26 @@ export async function generateExperience(projectId: string, recipePatch: Partial
     (result): result is { url: string; asset: ProjectAsset } => Boolean(result)
   );
   const downloaded = downloadedResults.map((result) => result.asset);
-  if (!downloaded.length) throw new Error("The website images could not be downloaded. Try another public page or image source.");
+  const generatedScenes = downloaded.length >= 4
+    ? []
+    : await generateBrandScenes(project, selectedSections, recipe, assetsDir, Math.max(4, selectedSections.length) - downloaded.length);
+  const visualAssets = [...downloaded, ...generatedScenes];
 
-  const films = await buildMotionFilm(project, recipe, downloaded.map((asset) => asset.path), assetsDir);
+  const films = await buildMotionFilm(project, recipe, visualAssets.map((asset) => asset.path), assetsDir);
   const urlToAssetId = new Map(downloadedResults.map(({ url, asset }) => [url, asset.id]));
   const intake = {
     ...project.intake,
     media: project.intake.media.map((media) => ({ ...media, assetId: urlToAssetId.get(media.url) ?? media.assetId })),
     products: project.intake.products.map((product) => ({ ...product, assetId: urlToAssetId.get(product.imageUrl) ?? product.assetId }))
   };
-  const generatedIds = new Set([...downloaded, ...films].map((asset) => asset.id));
+  const generatedIds = new Set([...visualAssets, ...films].map((asset) => asset.id));
   const heroFilm = films.find((asset) => asset.id === "hero-film");
   const mobileFilm = films.find((asset) => asset.id === "hero-film-mobile");
   const poster = films.find((asset) => asset.id === "generated-poster");
   project = await updateProject(projectId, {
     intake,
     recipe: { ...recipe, chapters: selectedSections.map((section) => section.title) },
-    assets: [...project.assets.filter((asset) => !generatedIds.has(asset.id)), ...downloaded, ...films],
+    assets: [...project.assets.filter((asset) => !generatedIds.has(asset.id) && !asset.id.startsWith("generated-scene-") && !asset.id.startsWith("source-image-") && !["hero-film", "hero-film-mobile", "generated-poster"].includes(asset.id)), ...visualAssets, ...films],
     scenes: project.scenes.map((scene) => ({ ...scene, sourceAssetId: heroFilm?.id })),
     generated: {
       ...project.generated,
@@ -76,7 +78,7 @@ export async function generateExperience(projectId: string, recipePatch: Partial
   project = await updateProject(projectId, {
     checklist: project.checklist.map((item) => ({ ...item, done: ["Website analyzed", "Sections selected", "Local motion film generated", "Frames optimized", "SEO and AEO packaged", "Static export prepared", "Final preview"].includes(item.label) || item.done })),
     vitals: [
-      { label: "Motion source", value: `${downloaded.length} images`, status: "Good" },
+      { label: "Motion source", value: generatedScenes.length ? `${downloaded.length} source + ${generatedScenes.length} created` : `${downloaded.length} source images`, status: "Good" },
       { label: "Video", value: heroFilm ? "local MP4" : "frames", status: heroFilm ? "Good" : "Watch" },
       { label: "Search", value: "SEO + AEO", status: "Good" },
       { label: "Mobile", value: "responsive", status: "Good" }
@@ -84,7 +86,19 @@ export async function generateExperience(projectId: string, recipePatch: Partial
   });
   const exported = await exportStaticSite(projectId);
   project = await updateProject(projectId, { generated: { ...project.generated, exportDir: exported.outputDir } });
-  return { project, manifest, mode: "local-image-sequence", exported, motion: { imageCount: downloaded.length, localVideo: Boolean(heroFilm), apiCalls: 0 } };
+  return {
+    project,
+    manifest,
+    mode: generatedScenes.length ? "local-visual-rescue" : "local-image-sequence",
+    exported,
+    motion: {
+      imageCount: visualAssets.length,
+      sourceImageCount: downloaded.length,
+      generatedImageCount: generatedScenes.length,
+      localVideo: Boolean(heroFilm),
+      apiCalls: 0
+    }
+  };
 }
 
 async function downloadImage(url: string, index: number, assetsDir: string): Promise<{ url: string; asset: ProjectAsset } | null> {
@@ -103,6 +117,42 @@ async function downloadImage(url: string, index: number, assetsDir: string): Pro
   } catch {
     return null;
   }
+}
+
+async function generateBrandScenes(project: EditorProject, sections: WebsiteSection[], recipe: MotionRecipe, assetsDir: string, requestedCount: number): Promise<ProjectAsset[]> {
+  const sceneCount = Math.max(1, Math.min(6, requestedCount));
+  const assets: ProjectAsset[] = [];
+  for (let index = 0; index < sceneCount; index += 1) {
+    const section = sections[index % sections.length];
+    const id = `generated-scene-${String(index + 1).padStart(2, "0")}`;
+    const path = resolve(assetsDir, `${id}.jpg`);
+    await sharp(generatedSceneSvg(project, section.heading, section.kind, recipe, index, 1600, 900))
+      .jpeg({ quality: 90, chromaSubsampling: "4:4:4" })
+      .toFile(path);
+    const info = await stat(path);
+    assets.push({ id, name: `${id}.jpg`, type: "image/jpeg", size: info.size, path, addedAt: new Date().toISOString(), purpose: "generated" });
+  }
+  return assets;
+}
+
+function generatedSceneSvg(project: EditorProject, heading: string, kind: string, recipe: MotionRecipe, index: number, width: number, height: number) {
+  const palette = [0, 1, 2, 3].map((position) => safeColor(recipe.palette[position], ["#080808", "#E8C928", "#F4F0E8", "#3155FF"][position]));
+  const [ink, accent, paper, signal] = palette;
+  const seed = hash(`${project.id}-${heading}-${index}`);
+  const x = 300 + seed % 920;
+  const y = 180 + (seed >> 3) % 520;
+  const rotation = -18 + (seed % 37);
+  const chapter = String(index + 1).padStart(2, "0");
+  const keyword = heading.split(/\s+/).filter((word) => word.length > 4)[0] || project.name;
+  const variant = index % 4;
+  const art = variant === 0
+    ? `<circle cx="${x}" cy="${y}" r="270" fill="url(#orb)"/><circle cx="${x}" cy="${y}" r="350" fill="none" stroke="${paper}" stroke-opacity=".15"/><path d="M0 760 L1600 520 M0 820 L1600 580 M0 880 L1600 640" stroke="${accent}" stroke-opacity=".25" stroke-width="2"/>`
+    : variant === 1
+      ? `<g transform="rotate(${rotation} 800 450)"><rect x="-240" y="110" width="2050" height="170" fill="${accent}" opacity=".86"/><rect x="-240" y="330" width="2050" height="70" fill="${signal}" opacity=".58"/><rect x="-240" y="455" width="2050" height="240" fill="url(#glass)"/></g>`
+      : variant === 2
+        ? `<g fill="none" stroke="${accent}">${Array.from({ length: 7 }, (_, ring) => `<circle cx="${x}" cy="${y}" r="${80 + ring * 58}" opacity="${0.72 - ring * 0.08}" stroke-width="${ring === 0 ? 10 : 2}"/>`).join("")}</g><path d="M120 690 C440 470 720 790 1030 420 S1440 270 1580 120" fill="none" stroke="${paper}" stroke-width="3" stroke-opacity=".5"/>`
+        : `<g transform="translate(${x - 520} ${y - 300}) rotate(${rotation})">${Array.from({ length: 12 }, (_, tile) => `<rect x="${(tile % 4) * 190}" y="${Math.floor(tile / 4) * 190}" width="150" height="150" rx="${tile % 3 === 0 ? 75 : 10}" fill="${tile % 2 ? accent : signal}" opacity="${0.18 + (tile % 4) * 0.13}"/>`).join("")}</g>`;
+  return Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${ink}"/><stop offset=".58" stop-color="${ink}"/><stop offset="1" stop-color="${signal}" stop-opacity=".62"/></linearGradient><radialGradient id="orb"><stop stop-color="${paper}" stop-opacity=".92"/><stop offset=".35" stop-color="${accent}" stop-opacity=".86"/><stop offset="1" stop-color="${signal}" stop-opacity="0"/></radialGradient><linearGradient id="glass"><stop stop-color="${paper}" stop-opacity=".08"/><stop offset="1" stop-color="${accent}" stop-opacity=".35"/></linearGradient><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="4"/><feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .13 0"/></filter></defs><rect width="100%" height="100%" fill="url(#bg)"/>${art}<text x="78" y="110" fill="${paper}" fill-opacity=".68" font-family="Arial" font-size="17" letter-spacing="8">${escapeXml(project.brand.logoText)}</text><text x="80" y="790" fill="${accent}" font-family="Arial" font-size="15" letter-spacing="6">${escapeXml(kind.toUpperCase())} / ${chapter}</text><text x="1540" y="820" text-anchor="end" fill="${paper}" fill-opacity=".1" font-family="Georgia" font-size="190" font-weight="bold">${escapeXml(keyword.toUpperCase().slice(0, 12))}</text><text x="800" y="520" text-anchor="middle" fill="${paper}" fill-opacity=".08" font-family="Georgia" font-size="500" font-weight="bold">${chapter}</text><rect width="100%" height="100%" filter="url(#noise)" opacity=".32"/></svg>`);
 }
 
 async function buildMotionFilm(project: EditorProject, recipe: MotionRecipe, paths: string[], assetsDir: string): Promise<ProjectAsset[]> {
@@ -222,7 +272,9 @@ async function cookLocalMotionFrames(project: EditorProject, recipe: MotionRecip
     scenes: [scene],
     budgets: { heroMaxMb: 10, totalMaxMb: 24 }
   };
-  await writeFile(resolve(sceneRoot, "manifest.json"), `${JSON.stringify({ source: { kind: "local image sequence", imageCount: project.intake?.media.length ?? 0 }, desktop: { resolution: "1600x900", actual_count: targetCount }, mobile: { resolution: "900x506", actual_count: targetCount }, created: manifest.generatedAt }, null, 2)}\n`, "utf8");
+  const sourceImageCount = project.assets.filter((asset) => asset.purpose === "reference").length;
+  const generatedImageCount = project.assets.filter((asset) => asset.purpose === "generated").length;
+  await writeFile(resolve(sceneRoot, "manifest.json"), `${JSON.stringify({ source: { kind: generatedImageCount ? "local visual rescue" : "local image sequence", imageCount: sourceImageCount + generatedImageCount, sourceImageCount, generatedImageCount }, desktop: { resolution: "1600x900", actual_count: targetCount }, mobile: { resolution: "900x506", actual_count: targetCount }, created: manifest.generatedAt }, null, 2)}\n`, "utf8");
   await writeFile(resolve(publicRoot, "frames.manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   return manifest;
 }
@@ -250,4 +302,14 @@ function clamp(value: number, min: number, max: number) {
 
 function escapeXml(value: string) {
   return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function safeColor(value: string | undefined, fallback: string) {
+  return /^#[0-9a-f]{6}$/i.test(value || "") ? value! : fallback;
+}
+
+function hash(value: string) {
+  let result = 2166136261;
+  for (const character of value) result = Math.imul(result ^ character.charCodeAt(0), 16777619);
+  return result >>> 0;
 }

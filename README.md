@@ -32,6 +32,16 @@ Irie Animate downloads the source site's public images and turns them into:
 
 Sharp renders the image sequence. FFmpeg encodes the MP4 files. The motion engine makes no Higgsfield or animation API calls.
 
+## Missing-image rescue
+
+Some websites have too few usable images for motion. Irie Animate handles that gap during the build:
+
+1. It uses any public source images it can download.
+2. It creates enough branded editorial scenes to complete the sequence.
+3. It builds the MP4 and scroll frames from the combined visual set.
+
+The generated scenes use the site's colors, headlines, section types, and brand name. Store product images still come from the source store. Irie Animate does not invent product photos.
+
 ## Website output
 
 Each download contains a static website with:
