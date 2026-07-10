@@ -2,7 +2,7 @@
   "name": "irie-animate",
   "version": "0.1.0",
   "private": true,
-  "description": "Config-driven app for turning video clips into scroll-driven animated websites.",
+  "description": "Turn any public website into a cinematic animated site with local image-to-video motion, optional commerce, and SEO/AEO output.",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
