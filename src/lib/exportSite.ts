@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildBrandConfigFromProject } from "./projectBrand";
 import { readProject, type EditorProject, type WebsiteSection } from "./projectStore";
+import { buildSiteSpine } from "./siteSpine";
 import type { FramesManifest } from "./types";
 
 export type ExportResult = { outputDir: string; files: string[] };
@@ -24,7 +25,7 @@ export async function exportStaticSite(projectId = "irie-demo"): Promise<ExportR
   await writeFile(resolve(outputDir, "brands", `${project.brandId}.json`), `${JSON.stringify(brand, null, 2)}\n`, "utf8");
 
   const assetUrls = new Map<string, string>();
-  const files = ["index.html", "README.md", "robots.txt", "sitemap.xml", "llms.txt", "mcp-actions.json", "site-data.json", `brands/${project.brandId}.json`, `public/frames/${project.brandId}/frames.manifest.json`];
+  const files = ["index.html", "README.md", "robots.txt", "sitemap.xml", "llms.txt", "mcp-actions.json", "site-data.json", "site-spine.json", `brands/${project.brandId}.json`, `public/frames/${project.brandId}/frames.manifest.json`];
   for (const asset of project.assets) {
     if (!existsSync(asset.path)) continue;
     const filename = `${asset.id}-${asset.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
@@ -41,7 +42,8 @@ export async function exportStaticSite(projectId = "irie-demo"): Promise<ExportR
     writeFile(resolve(outputDir, "sitemap.xml"), buildSitemap(project), "utf8"),
     writeFile(resolve(outputDir, "llms.txt"), buildLlms(project), "utf8"),
     writeFile(resolve(outputDir, "mcp-actions.json"), `${JSON.stringify(buildMcpActions(project), null, 2)}\n`, "utf8"),
-    writeFile(resolve(outputDir, "site-data.json"), `${JSON.stringify(buildSiteData(project), null, 2)}\n`, "utf8")
+    writeFile(resolve(outputDir, "site-data.json"), `${JSON.stringify(buildSiteData(project), null, 2)}\n`, "utf8"),
+    writeFile(resolve(outputDir, "site-spine.json"), `${JSON.stringify(buildSiteSpine(project, manifest, assetUrls), null, 2)}\n`, "utf8")
   ]);
   return { outputDir, files };
 }
