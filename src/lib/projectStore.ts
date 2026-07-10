@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 export type TimelineClip = {
@@ -27,6 +27,47 @@ export type EditorScene = {
   sourceAssetId?: string;
 };
 
+export type MotionIntensity = "calm" | "loud" | "unhinged";
+
+export type StorefrontProduct = {
+  id: string;
+  name: string;
+  price: string;
+  imageUrl: string;
+  purchaseUrl: string;
+  category?: string;
+  assetId?: string;
+};
+
+export type StorefrontIntake = {
+  sourceUrl: string;
+  shopUrl: string;
+  brandName: string;
+  headline: string;
+  description: string;
+  palette: string[];
+  products: StorefrontProduct[];
+  socialLinks: string[];
+  importedAt: string;
+};
+
+export type MotionRecipe = {
+  intensity: MotionIntensity;
+  heroDuration: number;
+  frameCount: number;
+  selectedProductIds: string[];
+  palette: string[];
+  chapters: string[];
+};
+
+export type GeneratedMedia = {
+  heroVideoAssetId?: string;
+  mobileVideoAssetId?: string;
+  posterAssetId?: string;
+  exportDir?: string;
+  generatedAt?: string;
+};
+
 export type EditorProject = {
   id: string;
   name: string;
@@ -46,38 +87,98 @@ export type EditorProject = {
   assets: Array<{ id: string; name: string; type: string; size: number; path: string; addedAt: string; purpose?: "reference" | "logo" | "source" }>;
   checklist: Array<{ label: string; done: boolean }>;
   vitals: Array<{ label: string; value: string; status: "Good" | "Watch" }>;
+  intake?: StorefrontIntake;
+  recipe?: MotionRecipe;
+  generated?: GeneratedMedia;
   updatedAt: string;
 };
 
-const projectDir = resolve(process.cwd(), ".irie-animate", "projects", "irie-demo");
-const projectPath = resolve(projectDir, "project.json");
+export type ProjectSummary = Pick<EditorProject, "id" | "name" | "brandId" | "updatedAt"> & {
+  status: "draft" | "ready";
+  sourceUrl?: string;
+};
 
-export async function readProject(): Promise<EditorProject> {
-  await ensureProject();
-  return normalizeProject(JSON.parse(await readFile(projectPath, "utf8")));
+const DEFAULT_PROJECT_ID = "irie-demo";
+const projectsRoot = resolve(process.cwd(), ".irie-animate", "projects");
+
+export function getProjectDir(projectId: string) {
+  return resolve(projectsRoot, safeProjectId(projectId));
 }
 
-export async function updateProject(patch: Partial<EditorProject>): Promise<EditorProject> {
-  const current = await readProject();
+export function projectExists(projectId: string) {
+  return existsSync(resolve(getProjectDir(projectId), "project.json"));
+}
+
+export async function listProjects(): Promise<ProjectSummary[]> {
+  await ensureDefaultProject();
+  const entries = await readdir(projectsRoot, { withFileTypes: true });
+  const projects = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry): Promise<ProjectSummary | null> => {
+    try {
+      const project = await readProject(entry.name);
+      return {
+        id: project.id,
+        name: project.name,
+        brandId: project.brandId,
+        updatedAt: project.updatedAt,
+        status: project.generated?.exportDir ? "ready" as const : "draft" as const,
+        ...(project.intake?.sourceUrl ? { sourceUrl: project.intake.sourceUrl } : {})
+      };
+    } catch {
+      return null;
+    }
+  }));
+  return projects.filter((project): project is ProjectSummary => Boolean(project)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function readProject(projectId = DEFAULT_PROJECT_ID): Promise<EditorProject> {
+  if (projectId === DEFAULT_PROJECT_ID) await ensureDefaultProject();
+  const projectPath = resolve(getProjectDir(projectId), "project.json");
+  if (!existsSync(projectPath)) throw new Error(`Project not found: ${projectId}`);
+  return normalizeProject(JSON.parse(await readFile(projectPath, "utf8")) as EditorProject);
+}
+
+export async function createProject(input: { id: string; name: string; intake?: StorefrontIntake }): Promise<EditorProject> {
+  const id = safeProjectId(input.id);
+  if (projectExists(id)) throw new Error(`Project already exists: ${id}`);
+  const project = createSeedProject({ id, name: input.name, intake: input.intake });
+  await writeProject(project);
+  return project;
+}
+
+export async function updateProject(projectId: string, patch: Partial<EditorProject>): Promise<EditorProject>;
+export async function updateProject(patch: Partial<EditorProject>): Promise<EditorProject>;
+export async function updateProject(projectIdOrPatch: string | Partial<EditorProject>, maybePatch?: Partial<EditorProject>): Promise<EditorProject> {
+  const projectId = typeof projectIdOrPatch === "string" ? projectIdOrPatch : DEFAULT_PROJECT_ID;
+  const patch = typeof projectIdOrPatch === "string" ? (maybePatch ?? {}) : projectIdOrPatch;
+  const current = await readProject(projectId);
   const next = mergeProject(current, patch);
-  await mkdir(projectDir, { recursive: true });
-  await writeFile(projectPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeProject(next);
   return next;
 }
 
-async function ensureProject() {
-  if (existsSync(projectPath)) return;
+async function writeProject(project: EditorProject) {
+  const projectDir = getProjectDir(project.id);
   await mkdir(projectDir, { recursive: true });
-  await writeFile(projectPath, `${JSON.stringify(createSeedProject(), null, 2)}\n`, "utf8");
+  await writeFile(resolve(projectDir, "project.json"), `${JSON.stringify(project, null, 2)}\n`, "utf8");
+}
+
+async function ensureDefaultProject() {
+  const projectPath = resolve(getProjectDir(DEFAULT_PROJECT_ID), "project.json");
+  if (existsSync(projectPath)) return;
+  await writeProject(createSeedProject({ id: DEFAULT_PROJECT_ID, name: "Aurelia" }));
 }
 
 function mergeProject(current: EditorProject, patch: Partial<EditorProject>): EditorProject {
-  return {
+  return normalizeProject({
     ...current,
     ...patch,
+    id: current.id,
+    brandId: patch.brandId ? safeProjectId(patch.brandId) : current.brandId,
     brand: patch.brand ? { ...current.brand, ...patch.brand } : current.brand,
+    recipe: patch.recipe ? { ...(current.recipe ?? defaultRecipe()), ...patch.recipe } : current.recipe,
+    generated: patch.generated ? { ...(current.generated ?? {}), ...patch.generated } : current.generated,
     updatedAt: new Date().toISOString()
-  };
+  });
 }
 
 function normalizeProject(project: EditorProject): EditorProject {
@@ -85,65 +186,93 @@ function normalizeProject(project: EditorProject): EditorProject {
     ...project,
     brand: {
       ...project.brand,
-      logoText: project.brand?.logoText ?? "AURELIA"
+      logoText: project.brand?.logoText ?? project.name.toUpperCase()
     },
-    scenes: (project.scenes ?? []).map((scene) => ({
-      ...scene,
-      sourceAssetId: scene.sourceAssetId
-    })),
+    scenes: (project.scenes ?? []).map((scene) => ({ ...scene, sourceAssetId: scene.sourceAssetId })),
     assets: project.assets ?? [],
     checklist: project.checklist ?? [],
-    vitals: project.vitals ?? []
+    vitals: project.vitals ?? [],
+    recipe: project.recipe ?? defaultRecipe(),
+    generated: project.generated ?? {}
   };
 }
 
-function createSeedProject(): EditorProject {
+function createSeedProject(input: { id: string; name: string; intake?: StorefrontIntake }): EditorProject {
+  const palette = input.intake?.palette?.length ? input.intake.palette : ["#D8B97A", "#0E0E10", "#666B72", "#00E5FF"];
+  const logoText = input.intake?.brandName?.toUpperCase() || input.name.toUpperCase();
   return {
-    id: "irie-demo",
-    name: "Aurelia",
-    version: "v1.7.2",
-    brandId: "irie-demo",
+    id: input.id,
+    name: input.name,
+    version: "v2.0.0",
+    brandId: input.id,
     activeSceneId: "hero",
     brand: {
-      kit: "Aurelia",
-      logoText: "AURELIA",
-      motionTone: "Cinematic Luxe",
+      kit: input.intake?.brandName || input.name,
+      logoText,
+      motionTone: "Loud",
       colors: [
-        { name: "Gold", hex: "#D8B97A" },
-        { name: "Ink", hex: "#0E0E10" },
+        { name: "Gold", hex: palette[2] ?? palette[0] ?? "#D8B97A" },
+        { name: "Ink", hex: palette[0] ?? "#0E0E10" },
         { name: "Slate", hex: "#666B72" },
-        { name: "Cyan", hex: "#00E5FF" }
+        { name: "Cyan", hex: palette[1] ?? "#00E5FF" }
       ],
       typography: [
-        { role: "Headings", family: "Cinzel", sample: "Aa" },
+        { role: "Headings", family: "Archivo Black", sample: "Aa" },
         { role: "Body", family: "Inter", sample: "Aa" }
       ]
     },
-    scenes: [
-      { id: "hero", number: "01", name: "Hero", frameSceneId: "hero", target: "hero" },
-      { id: "craft", number: "02", name: "Craft", frameSceneId: "gallery", target: "gallery" },
-      { id: "details", number: "03", name: "Details", frameSceneId: "logo", target: "footer" },
-      { id: "ritual", number: "04", name: "Ritual", frameSceneId: "hero", target: "hero" },
-      { id: "reveal", number: "05", name: "Reveal", frameSceneId: "gallery", target: "gallery" },
-      { id: "legacy", number: "06", name: "Legacy", frameSceneId: "logo", target: "footer" }
-    ],
-    timeline: [
-      { id: "camera", icon: "camera", label: "Camera", clips: [{ id: "camera-push", start: 15, width: 27, text: "Camera Push In", color: "gold", keys: [0, 62, 98] }] },
-      { id: "bottle", icon: "box", label: "Bottle", clips: [{ id: "bottle-parallax", start: 15, width: 42, text: "Parallax Up", color: "cyan", keys: [0, 58, 74, 100] }, { id: "bottle-rotate", start: 59, width: 41, text: "Rotate Y", color: "cyan", keys: [100] }] },
-      { id: "title", icon: "type", label: "Title", clips: [{ id: "title-main", start: 14, width: 62, text: "Essence of Elements", color: "amber", keys: [0, 73, 90] }] },
-      { id: "subtitle", icon: "type", label: "Subtitle", clips: [{ id: "subtitle-main", start: 15, width: 62, text: "Scroll to Discover", color: "amber", keys: [0, 70, 88] }] },
-      { id: "light", icon: "sun", label: "Light", clips: [{ id: "light-bloom", start: 14, width: 66, text: "Shift & Bloom", color: "violet", keys: [0, 58, 86] }] },
-      { id: "water", icon: "waves", label: "Water", clips: [{ id: "water-ripples", start: 15, width: 66, text: "Ripples", color: "cyan", keys: [0, 98] }] },
-      { id: "particles", icon: "sparkles", label: "Particles", clips: [{ id: "particles-mist", start: 14, width: 67, text: "Mist", color: "cyan", keys: [0, 97] }] }
-    ],
+    scenes: defaultScenes(),
+    timeline: defaultTimeline(),
     assets: [],
-    checklist: ["Scenes complete", "Assets optimized", "Web Vitals pass", "Accessibility audit", "SEO & metadata", "Favicon & social image", "Custom domain", "Final preview", "Deploy"].map((label, index) => ({ label, done: index < 8 })),
+    checklist: ["Store imported", "Products selected", "Hero film generated", "Frames optimized", "Mobile payload pass", "Copy reviewed", "Static export prepared", "Final preview", "Deploy"].map((label) => ({ label, done: false })),
     vitals: [
-      { label: "LCP", value: "1.2s", status: "Good" },
-      { label: "INP", value: "78ms", status: "Good" },
-      { label: "CLS", value: "0.03", status: "Good" },
-      { label: "TBT", value: "120ms", status: "Good" }
+      { label: "LCP", value: "pending", status: "Watch" },
+      { label: "INP", value: "pending", status: "Watch" },
+      { label: "CLS", value: "pending", status: "Watch" },
+      { label: "TBT", value: "pending", status: "Watch" }
     ],
+    intake: input.intake,
+    recipe: defaultRecipe(input.intake?.products.slice(0, 6).map((product) => product.id)),
+    generated: {},
     updatedAt: new Date().toISOString()
   };
+}
+
+function defaultScenes(): EditorScene[] {
+  return [
+    { id: "hero", number: "01", name: "Hero", frameSceneId: "hero", target: "hero" },
+    { id: "philosophy", number: "02", name: "Philosophy", frameSceneId: "gallery", target: "gallery" },
+    { id: "drop", number: "03", name: "Featured Drop", frameSceneId: "logo", target: "specs" },
+    { id: "story", number: "04", name: "Product Story", frameSceneId: "hero", target: "hero" },
+    { id: "community", number: "05", name: "Community", frameSceneId: "gallery", target: "gallery" },
+    { id: "shop", number: "06", name: "Shop", frameSceneId: "logo", target: "footer" }
+  ];
+}
+
+function defaultTimeline(): TimelineTrack[] {
+  return [
+    { id: "camera", icon: "camera", label: "Camera", clips: [{ id: "camera-push", start: 12, width: 30, text: "Camera Push In", color: "gold", keys: [0, 60, 100] }] },
+    { id: "product", icon: "box", label: "Product", clips: [{ id: "product-parallax", start: 12, width: 58, text: "Product Parallax", color: "cyan", keys: [0, 55, 82, 100] }] },
+    { id: "title", icon: "type", label: "Title", clips: [{ id: "title-main", start: 10, width: 64, text: "Primary Headline", color: "amber", keys: [0, 72, 92] }] },
+    { id: "subtitle", icon: "type", label: "Subtitle", clips: [{ id: "subtitle-main", start: 15, width: 58, text: "Brand Promise", color: "amber", keys: [0, 68, 90] }] },
+    { id: "light", icon: "sun", label: "Light", clips: [{ id: "light-bloom", start: 8, width: 72, text: "Color Shift", color: "violet", keys: [0, 55, 88] }] },
+    { id: "particles", icon: "sparkles", label: "Texture", clips: [{ id: "texture-grain", start: 10, width: 70, text: "Film Grain", color: "cyan", keys: [0, 100] }] }
+  ];
+}
+
+function defaultRecipe(selectedProductIds: string[] = []): MotionRecipe {
+  return {
+    intensity: "loud",
+    heroDuration: 10,
+    frameCount: 96,
+    selectedProductIds,
+    palette: ["#0A0A08", "#A8FF2E", "#FFD51F", "#ED2C25"],
+    chapters: ["Hero", "Brand philosophy", "Featured drop", "Product story", "Community", "Shop"]
+  };
+}
+
+export function safeProjectId(value: string) {
+  const safe = value.toLowerCase().trim().replace(/^https?:\/\//, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 64);
+  if (!safe) throw new Error("Project id is required.");
+  return safe;
 }

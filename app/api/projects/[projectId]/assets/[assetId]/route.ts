@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
-import { readProject } from "@/src/lib/projectStore";
+import { projectExists, readProject } from "@/src/lib/projectStore";
 
 export const runtime = "nodejs";
 
@@ -10,11 +10,11 @@ type Params = {
 
 export async function GET(_request: Request, { params }: Params) {
   const { projectId, assetId } = await params;
-  if (projectId !== "irie-demo") {
+  if (!projectExists(projectId)) {
     return NextResponse.json({ ok: false, error: "Project not found." }, { status: 404 });
   }
 
-  const project = await readProject();
+  const project = await readProject(projectId);
   const asset = project.assets.find((item) => item.id === assetId);
   if (!asset) {
     return NextResponse.json({ ok: false, error: "Asset not found." }, { status: 404 });

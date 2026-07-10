@@ -6,6 +6,7 @@ import type { EditorProject } from "./projectStore";
 const base = baseBrand as BrandConfig;
 
 export function buildBrandConfigFromProject(project: EditorProject): BrandConfig {
+  const posterAsset = project.generated?.posterAssetId ? project.assets.find((asset) => asset.id === project.generated?.posterAssetId) : undefined;
   const scenes = base.scenes.map((scene) => {
     const editorScene = project.scenes.find((item) => item.frameSceneId === scene.id);
     const sourceAsset = editorScene?.sourceAssetId ? project.assets.find((asset) => asset.id === editorScene.sourceAssetId) : null;
@@ -14,6 +15,7 @@ export function buildBrandConfigFromProject(project: EditorProject): BrandConfig
       ...scene,
       title: editorScene?.name || scene.title,
       target: normalizeTarget(editorScene?.target || scene.target),
+      frames: project.recipe?.frameCount ?? scene.frames,
       sourceVideo
     };
   });
@@ -24,7 +26,8 @@ export function buildBrandConfigFromProject(project: EditorProject): BrandConfig
     name: project.name || project.brand.kit || base.name,
     logoText: project.brand.logoText || base.logoText,
     motionTone: project.brand.motionTone || base.motionTone,
-    tagline: `${project.brand.motionTone || base.motionTone} scroll experience built from ${project.scenes.length} editor scene(s).`,
+    tagline: project.intake?.description || `${project.brand.motionTone || base.motionTone} scroll experience built from ${project.scenes.length} editor scene(s).`,
+    demoSource: posterAsset ? { imagePath: posterAsset.path, crop: { left: 0, top: 0, width: 1600, height: 900 } } : base.demoSource,
     colors: {
       background: getColor(project, "Ink", 1, base.colors.background),
       surface: base.colors.surface,

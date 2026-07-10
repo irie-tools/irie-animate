@@ -11,9 +11,9 @@ export type ProjectPipelineResult = {
   log: string;
 };
 
-export async function cookProjectFrames(): Promise<ProjectPipelineResult> {
+export async function cookProjectFrames(projectId = "irie-demo"): Promise<ProjectPipelineResult> {
   const cwd = process.cwd();
-  const project = await readProject();
+  const project = await readProject(projectId);
   const generatedDir = resolve(cwd, ".irie-animate", "build");
   const generatedConfigPath = resolve(generatedDir, `${project.brandId}.generated-brand.json`);
   const generatedBrand = buildBrandConfigFromProject(project);

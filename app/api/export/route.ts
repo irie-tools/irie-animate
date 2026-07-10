@@ -3,9 +3,10 @@ import { exportStaticSite } from "@/src/lib/exportSite";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const result = await exportStaticSite("irie-demo");
+    const body = await request.json().catch(() => ({}));
+    const result = await exportStaticSite(typeof body.projectId === "string" ? body.projectId : "irie-demo");
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     return NextResponse.json(

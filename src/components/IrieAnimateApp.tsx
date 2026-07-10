@@ -39,15 +39,12 @@ import {
   Waves
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import brandConfig from "../../brands/irie-demo.json";
 import type { ProjectBrain } from "../lib/projectBrain";
 import { isVideoAsset } from "../lib/projectBrain";
 import type { EditorProject, TimelineTrack } from "../lib/projectStore";
 import type { TenantSettings } from "../lib/tenantStore";
-import type { BrandConfig, FramesManifest, SceneManifest } from "../lib/types";
+import type { FramesManifest, SceneManifest } from "../lib/types";
 import styles from "./IrieAnimateApp.module.css";
-
-const brand = brandConfig as BrandConfig;
 
 const sideTabs = [
   { id: "brand", label: "Brand", Icon: LayoutPanelLeft },
@@ -77,7 +74,7 @@ type RightTab = "pipeline" | "inspect" | "brain" | "data" | "code";
 type RailMode = "layout" | "timeline" | "brain" | "code" | "analytics";
 type TimelineView = "timeline" | "curve";
 
-export function IrieAnimateApp() {
+export function IrieAnimateApp({ initialProjectId = "irie-demo" }: { initialProjectId?: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadPurposeRef = useRef<"reference" | "logo">("reference");
@@ -117,7 +114,7 @@ export function IrieAnimateApp() {
 
   const loadProject = useCallback(async () => {
     try {
-      const response = await fetch("/api/projects/irie-demo", {
+      const response = await fetch(`/api/projects/${encodeURIComponent(initialProjectId)}`, {
         cache: "no-store"
       });
       if (!response.ok) {
@@ -131,7 +128,7 @@ export function IrieAnimateApp() {
     } catch (error) {
       setManifestError(error instanceof Error ? error.message : "Project failed to load.");
     }
-  }, []);
+  }, [initialProjectId]);
 
   useEffect(() => {
     loadProject();
@@ -155,7 +152,7 @@ export function IrieAnimateApp() {
 
   const loadBrain = useCallback(async () => {
     try {
-      const response = await fetch("/api/brain", { cache: "no-store" });
+      const response = await fetch(`/api/brain?projectId=${encodeURIComponent(initialProjectId)}`, { cache: "no-store" });
       const payload = await response.json();
       if (response.ok && payload.ok) {
         setBrain(payload.brain as ProjectBrain);
@@ -163,7 +160,7 @@ export function IrieAnimateApp() {
     } catch {
       setBrain(null);
     }
-  }, []);
+  }, [initialProjectId]);
 
   useEffect(() => {
     if (!project) return;
@@ -175,7 +172,7 @@ export function IrieAnimateApp() {
       setUndoStack((stack) => [...stack.slice(-24), project]);
       setRedoStack([]);
     }
-    const response = await fetch("/api/projects/irie-demo", {
+    const response = await fetch(`/api/projects/${encodeURIComponent(initialProjectId)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch)
@@ -189,10 +186,10 @@ export function IrieAnimateApp() {
     void loadBrain();
     setToast("Project saved.");
     return payload.project as EditorProject;
-  }, [loadBrain, project]);
+  }, [initialProjectId, loadBrain, project]);
 
   const restoreProject = useCallback(async (snapshot: EditorProject) => {
-    const response = await fetch("/api/projects/irie-demo", {
+    const response = await fetch(`/api/projects/${encodeURIComponent(initialProjectId)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(snapshot)
@@ -207,7 +204,7 @@ export function IrieAnimateApp() {
     void loadBrain();
     setToast("Project restored.");
     return payload.project as EditorProject;
-  }, [loadBrain]);
+  }, [initialProjectId, loadBrain]);
 
   const undoProject = useCallback(async () => {
     if (!project || !undoStack.length) return;
@@ -250,7 +247,7 @@ export function IrieAnimateApp() {
   useEffect(() => {
     if (!activeScene) return;
     let cancelled = false;
-    const cacheKey = `${activeScene.id}:${isMobilePreview ? "mobile" : "desktop"}`;
+    const cacheKey = `${project?.brandId ?? initialProjectId}:${activeScene.id}:${isMobilePreview ? "mobile" : "desktop"}`;
 
     async function loadFrames(scene: SceneManifest) {
       if (loadedFrames.current.has(cacheKey)) {
@@ -268,7 +265,7 @@ export function IrieAnimateApp() {
         const frameIndex = i - 1;
         const image = new Image();
         image.decoding = "async";
-        image.src = `/frames/${brand.id}/${scene.id}/${folder}/frame-${String(i).padStart(4, "0")}.webp`;
+        image.src = `/frames/${encodeURIComponent(project?.brandId ?? initialProjectId)}/${scene.id}/${folder}/frame-${String(i).padStart(4, "0")}.webp`;
         image.onload = () => {
           nextFrames[frameIndex] = image;
           completed += 1;
@@ -289,7 +286,7 @@ export function IrieAnimateApp() {
     return () => {
       cancelled = true;
     };
-  }, [activeScene, isMobilePreview]);
+  }, [activeScene, initialProjectId, isMobilePreview, project?.brandId]);
 
   const drawFrame = useCallback(() => {
     const startedAt = performance.now();
@@ -297,7 +294,7 @@ export function IrieAnimateApp() {
     const canvas = canvasRef.current;
     if (!scene || !canvas) return;
 
-    const cacheKey = `${scene.id}:${isMobilePreview ? "mobile" : "desktop"}`;
+    const cacheKey = `${project?.brandId ?? initialProjectId}:${scene.id}:${isMobilePreview ? "mobile" : "desktop"}`;
     const frames = loadedFrames.current.get(cacheKey);
     const context = canvas.getContext("2d");
     if (!context) return;
@@ -343,7 +340,7 @@ export function IrieAnimateApp() {
       drawSampleAt.current = now;
       setDrawMs(Number((now - startedAt).toFixed(2)));
     }
-  }, [activeScene, frameLoadVersion, isMobilePreview, scrub]);
+  }, [activeScene, frameLoadVersion, initialProjectId, isMobilePreview, project?.brandId, scrub]);
 
   useEffect(() => {
     drawFrame();
@@ -370,7 +367,11 @@ export function IrieAnimateApp() {
     setManifestError(null);
     setToast("Cooking frame sequence...");
     try {
-      const response = await fetch("/api/pipeline/cook", { method: "POST" });
+      const response = await fetch("/api/pipeline/cook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: initialProjectId })
+      });
       const payload = await response.json();
       if (!response.ok || !payload.ok) {
         throw new Error(payload.error || "Pipeline failed.");
@@ -389,22 +390,30 @@ export function IrieAnimateApp() {
     } finally {
       setIsGenerating(false);
     }
-  }, [loadBrain]);
+  }, [initialProjectId, loadBrain]);
 
   const exportSite = useCallback(async () => {
     setToast("Exporting static package...");
-    const response = await fetch("/api/export", { method: "POST" });
+    const response = await fetch("/api/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: initialProjectId })
+    });
     const payload = await response.json();
     if (payload.ok) {
       setToast(`Export ready: ${payload.outputDir}`);
     } else {
       setToast(payload.error || "Export failed.");
     }
-  }, []);
+  }, [initialProjectId]);
 
   const publishPreview = useCallback(async () => {
     setToast("Preparing publish fallback...");
-    const response = await fetch("/api/publish", { method: "POST" });
+    const response = await fetch("/api/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: initialProjectId })
+    });
     const payload = await response.json();
     if (payload.ok) {
       setPublishResult(payload.message);
@@ -412,7 +421,7 @@ export function IrieAnimateApp() {
     } else {
       setToast(payload.error || "Publish failed.");
     }
-  }, []);
+  }, [initialProjectId]);
 
   const sharePreview = useCallback(async () => {
     const url = typeof window !== "undefined" ? window.location.href : "http://localhost:3000";
@@ -427,7 +436,7 @@ export function IrieAnimateApp() {
     formData.append("purpose", purpose);
     setReferenceCount(files.length);
     setToast("Uploading reference assets...");
-    const response = await fetch("/api/projects/irie-demo/assets", {
+    const response = await fetch(`/api/projects/${encodeURIComponent(initialProjectId)}/assets`, {
       method: "POST",
       body: formData
     });
@@ -439,7 +448,7 @@ export function IrieAnimateApp() {
     setProject(payload.project as EditorProject);
     void loadBrain();
     setToast(purpose === "logo" ? "Logo asset saved and assigned." : `${payload.assets.length} asset(s) saved locally.`);
-  }, [loadBrain]);
+  }, [initialProjectId, loadBrain]);
 
   const activateRailMode = useCallback((mode: RailMode) => {
     setActiveRailMode(mode);
@@ -500,7 +509,7 @@ export function IrieAnimateApp() {
     const response = await fetch("/api/brain", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action })
+      body: JSON.stringify({ action, projectId: initialProjectId })
     });
     const payload = await response.json();
     if (!response.ok || !payload.ok) {
@@ -510,7 +519,7 @@ export function IrieAnimateApp() {
     setProject(payload.project as EditorProject);
     setBrain(payload.brain as ProjectBrain);
     setToast(action === "auto-map-sources" ? "Video sources mapped to scenes." : "Checklist synced from engine state.");
-  }, []);
+  }, [initialProjectId]);
 
   const addScene = useCallback(() => {
     if (!project) return;
@@ -572,7 +581,7 @@ export function IrieAnimateApp() {
   const otherMs = Number(Math.max(3.1, 24.3 - scriptMs - layoutMs - paintMs).toFixed(1));
   const frameBudgetMs = Number((scriptMs + layoutMs + paintMs + otherMs).toFixed(1));
   const budgetRatio = Math.min(100, Math.round((frameBudgetMs / 33.3) * 100));
-  const codeSnippet = `# Build from the live local project state\n# Uses assigned video sources when scenes point at MP4/MOV assets.\ncurl -X POST http://localhost:3000/api/pipeline/cook\ncurl -X POST http://localhost:3000/api/export\n\n# CLI fallback still exists for static brand JSON\nnpm run pipeline -- --brand ${project?.brandId ?? brand.id}\n# frames -> public/frames/${project?.brandId ?? brand.id}/`;
+  const codeSnippet = `# Build from the live local project state\n# Uses assigned video sources when scenes point at MP4/MOV assets.\ncurl -X POST -H 'Content-Type: application/json' -d '{"projectId":"${initialProjectId}"}' http://localhost:3000/api/pipeline/cook\ncurl -X POST -H 'Content-Type: application/json' -d '{"projectId":"${initialProjectId}"}' http://localhost:3000/api/export\n\n# CLI fallback still exists for static brand JSON\nnpm run pipeline -- --brand ${project?.brandId ?? initialProjectId}\n# frames -> public/frames/${project?.brandId ?? initialProjectId}/`;
   const completedChecklist = project?.checklist.filter((item) => item.done).length ?? 0;
   const pipelineSteps = [
     { label: "Ingest", done: Boolean(project) },
@@ -669,7 +678,7 @@ export function IrieAnimateApp() {
               <label className={styles.fieldLabel}>Logo</label>
               <div className={styles.logoGrid}>
                 <div className={styles.logoCardInput}>
-                  {logoAsset ? <img src={`/api/projects/irie-demo/assets/${logoAsset.id}`} alt="Uploaded logo" /> : null}
+                  {logoAsset ? <img src={`/api/projects/${encodeURIComponent(initialProjectId)}/assets/${logoAsset.id}`} alt="Uploaded logo" /> : null}
                   <input
                     aria-label="Logo text"
                     value={project?.brand.logoText ?? ""}

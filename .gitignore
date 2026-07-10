@@ -4,6 +4,7 @@ out/
 dist/
 exports/
 .irie-animate/
+/public/frames/*/
 .vercel/
 
 .DS_Store
