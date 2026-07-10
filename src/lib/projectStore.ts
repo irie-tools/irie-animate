@@ -39,22 +39,84 @@ export type StorefrontProduct = {
   assetId?: string;
 };
 
-export type StorefrontIntake = {
+export type WebsiteSectionKind = "hero" | "about" | "services" | "gallery" | "proof" | "contact" | "content" | "commerce";
+
+export type WebsiteSection = {
+  id: string;
+  title: string;
+  heading: string;
+  summary: string;
+  body: string;
+  kind: WebsiteSectionKind;
+  imageUrls: string[];
+  sourceUrl: string;
+};
+
+export type WebsitePage = {
+  id: string;
+  url: string;
+  title: string;
+  description: string;
+  headings: string[];
+  imageUrls: string[];
+};
+
+export type WebsiteMedia = {
+  id: string;
+  url: string;
+  alt: string;
+  sourceUrl: string;
+  assetId?: string;
+};
+
+export type WebsiteAction = {
+  id: string;
+  label: string;
+  url: string;
+  kind: "contact" | "book" | "buy" | "subscribe" | "visit";
+};
+
+export type WebsiteIntake = {
   sourceUrl: string;
   shopUrl: string;
   brandName: string;
   headline: string;
   description: string;
+  siteKind: "business" | "commerce" | "portfolio" | "restaurant" | "service" | "publisher" | "other";
+  hasCommerce: boolean;
   palette: string[];
+  pages: WebsitePage[];
+  sections: WebsiteSection[];
+  media: WebsiteMedia[];
   products: StorefrontProduct[];
+  actions: WebsiteAction[];
   socialLinks: string[];
+  seo: {
+    sourceTitle: string;
+    sourceDescription: string;
+    canonicalUrl: string;
+    h1Count: number;
+    imagesWithAlt: number;
+    totalImages: number;
+    schemaTypes: string[];
+    issues: string[];
+  };
+  answer: {
+    summary: string;
+    facts: string[];
+    faqs: Array<{ question: string; answer: string }>;
+  };
   importedAt: string;
 };
+
+export type StorefrontIntake = WebsiteIntake;
 
 export type MotionRecipe = {
   intensity: MotionIntensity;
   heroDuration: number;
   frameCount: number;
+  selectedSectionIds: string[];
+  selectedMediaIds: string[];
   selectedProductIds: string[];
   palette: string[];
   chapters: string[];
@@ -111,7 +173,7 @@ export async function readProject(projectId = DEFAULT_PROJECT_ID): Promise<Edito
   return normalizeProject(JSON.parse(await readFile(projectPath, "utf8")) as EditorProject);
 }
 
-export async function createProject(input: { id: string; name: string; intake?: StorefrontIntake }): Promise<EditorProject> {
+export async function createProject(input: { id: string; name: string; intake?: WebsiteIntake }): Promise<EditorProject> {
   const id = safeProjectId(input.id);
   if (projectExists(id)) throw new Error(`Project already exists: ${id}`);
   const project = createSeedProject({ id, name: input.name, intake: input.intake });
@@ -167,7 +229,7 @@ function normalizeProject(project: EditorProject): EditorProject {
   };
 }
 
-function createSeedProject(input: { id: string; name: string; intake?: StorefrontIntake }): EditorProject {
+function createSeedProject(input: { id: string; name: string; intake?: WebsiteIntake }): EditorProject {
   const palette = input.intake?.palette?.length ? input.intake.palette : ["#D8B97A", "#0E0E10", "#666B72", "#00E5FF"];
   const logoText = input.intake?.brandName?.toUpperCase() || input.name.toUpperCase();
   return {
@@ -194,7 +256,7 @@ function createSeedProject(input: { id: string; name: string; intake?: Storefron
     scenes: defaultScenes(),
     timeline: defaultTimeline(),
     assets: [],
-    checklist: ["Store imported", "Products selected", "Hero film generated", "Frames optimized", "Mobile payload pass", "Copy reviewed", "Static export prepared", "Final preview", "Deploy"].map((label) => ({ label, done: false })),
+    checklist: ["Website analyzed", "Sections selected", "Local motion film generated", "Frames optimized", "SEO and AEO packaged", "Static export prepared", "Final preview"].map((label) => ({ label, done: false })),
     vitals: [
       { label: "LCP", value: "pending", status: "Watch" },
       { label: "INP", value: "pending", status: "Watch" },
@@ -202,7 +264,7 @@ function createSeedProject(input: { id: string; name: string; intake?: Storefron
       { label: "TBT", value: "pending", status: "Watch" }
     ],
     intake: input.intake,
-    recipe: defaultRecipe(input.intake?.products.slice(0, 6).map((product) => product.id)),
+    recipe: defaultRecipe(input.intake),
     generated: {},
     updatedAt: new Date().toISOString()
   };
@@ -211,11 +273,11 @@ function createSeedProject(input: { id: string; name: string; intake?: Storefron
 function defaultScenes(): EditorScene[] {
   return [
     { id: "hero", number: "01", name: "Hero", frameSceneId: "hero", target: "hero" },
-    { id: "philosophy", number: "02", name: "Philosophy", frameSceneId: "gallery", target: "gallery" },
-    { id: "drop", number: "03", name: "Featured Drop", frameSceneId: "logo", target: "specs" },
-    { id: "story", number: "04", name: "Product Story", frameSceneId: "hero", target: "hero" },
-    { id: "community", number: "05", name: "Community", frameSceneId: "gallery", target: "gallery" },
-    { id: "shop", number: "06", name: "Shop", frameSceneId: "logo", target: "footer" }
+    { id: "story", number: "02", name: "Story", frameSceneId: "gallery", target: "gallery" },
+    { id: "highlights", number: "03", name: "Highlights", frameSceneId: "logo", target: "specs" },
+    { id: "details", number: "04", name: "Details", frameSceneId: "hero", target: "hero" },
+    { id: "proof", number: "05", name: "Proof", frameSceneId: "gallery", target: "gallery" },
+    { id: "contact", number: "06", name: "Contact", frameSceneId: "logo", target: "footer" }
   ];
 }
 
@@ -230,14 +292,16 @@ function defaultTimeline(): TimelineTrack[] {
   ];
 }
 
-function defaultRecipe(selectedProductIds: string[] = []): MotionRecipe {
+function defaultRecipe(intake?: WebsiteIntake): MotionRecipe {
   return {
     intensity: "loud",
     heroDuration: 10,
     frameCount: 96,
-    selectedProductIds,
+    selectedSectionIds: intake?.sections.slice(0, 6).map((section) => section.id) ?? [],
+    selectedMediaIds: intake?.media.slice(0, 8).map((media) => media.id) ?? [],
+    selectedProductIds: intake?.products.slice(0, 6).map((product) => product.id) ?? [],
     palette: ["#0A0A08", "#A8FF2E", "#FFD51F", "#ED2C25"],
-    chapters: ["Hero", "Brand philosophy", "Featured drop", "Product story", "Community", "Shop"]
+    chapters: intake?.sections.slice(0, 6).map((section) => section.title) ?? ["Hero", "Story", "Highlights", "Details", "Proof", "Contact"]
   };
 }
 

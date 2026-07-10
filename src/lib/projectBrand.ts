@@ -14,7 +14,7 @@ export function buildBrandConfigFromProject(project: EditorProject): BrandConfig
       ...scene,
       title: editorScene?.name || scene.title,
       target: normalizeTarget(editorScene?.target || scene.target),
-      frames: project.recipe?.frameCount ?? scene.frames,
+      frames: scene.id === "hero" ? project.recipe?.frameCount ?? scene.frames : scene.id === "gallery" ? Math.min(48, project.recipe?.frameCount ?? 48) : Math.min(32, project.recipe?.frameCount ?? 32),
       sourceVideo
     };
   });
@@ -38,10 +38,10 @@ export function buildBrandConfigFromProject(project: EditorProject): BrandConfig
     scenes: scenes as BrandScene[],
     specs: [
       { label: "Frame engine", value: "Canvas frame scrub" },
-      { label: "Project scenes", value: `${project.scenes.length}` },
-      { label: "Mapped videos", value: `${project.scenes.filter((scene) => scene.sourceAssetId).length}` },
-      { label: "Timeline tracks", value: `${project.timeline.length}` },
-      { label: "Export source", value: "Local project JSON" }
+      { label: "Website type", value: project.intake?.siteKind ?? "website" },
+      { label: "Source images", value: `${project.intake?.media.length ?? 0}` },
+      { label: "Motion video", value: project.generated?.heroVideoAssetId ? "Local MP4" : "Pending" },
+      { label: "Search foundation", value: "SEO + AEO" }
     ],
     workflow: [
       { label: "Project state loaded", status: "ready" },
