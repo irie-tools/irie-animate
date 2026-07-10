@@ -63,10 +63,18 @@ function buildStaticHtml(project: EditorProject, manifest: FramesManifest, asset
   const primaryAction = intake.actions[0] ?? { id: "visit", label: intake.hasCommerce ? "Visit the shop" : "Visit the original site", url: intake.sourceUrl, kind: "visit" as const };
   const overlays = buildOverlays(sections, primaryAction.url);
   const markers = sections.map((section, index) => `<button aria-label="${escapeHtml(section.title)}" data-marker="${index}"><span>${String(index + 1).padStart(2, "0")}</span></button>`).join("");
-  const gallery = selectedMedia.map((media, index) => {
-    const image = media.assetId ? assetUrls.get(media.assetId) : media.url;
-    return `<figure class="gallery-item ${index % 4 === 0 ? "tall" : ""}" data-parallax="${index % 2 === 0 ? 18 : -14}"><img src="${escapeHtml(image || media.url)}" alt="${escapeHtml(media.alt)}" loading="lazy"><figcaption>${escapeHtml(media.alt)}</figcaption></figure>`;
-  }).join("");
+  const galleryItems = selectedMedia.map((media) => ({
+    image: media.assetId ? assetUrls.get(media.assetId) || media.url : media.url,
+    alt: media.alt
+  }));
+  if (galleryItems.length < 6) {
+    for (const asset of project.assets.filter((item) => item.purpose === "generated")) {
+      const image = assetUrls.get(asset.id);
+      if (image) galleryItems.push({ image, alt: `${intake.brandName} generated brand scene` });
+      if (galleryItems.length >= 8) break;
+    }
+  }
+  const gallery = galleryItems.map((media, index) => `<figure class="gallery-item ${index % 4 === 0 ? "tall" : ""}" data-parallax="${index % 2 === 0 ? 18 : -14}"><img src="${escapeHtml(media.image)}" alt="${escapeHtml(media.alt)}" loading="lazy"><figcaption>${escapeHtml(media.alt)}</figcaption></figure>`).join("");
   const productCards = selectedProducts.map((product, index) => {
     const image = product.assetId ? assetUrls.get(product.assetId) : product.imageUrl;
     return `<article class="product-card"><span>${String(index + 1).padStart(2, "0")}</span><img src="${escapeHtml(image || product.imageUrl)}" alt="${escapeHtml(product.name)}" loading="lazy"><h3>${escapeHtml(product.name)}</h3><p>${escapeHtml(product.price || "View product")}</p><a href="${escapeHtml(product.purchaseUrl)}" target="_blank" rel="noreferrer">View product ↗</a></article>`;
@@ -140,11 +148,29 @@ function buildMcpActions(project: EditorProject) {
 
 function buildSiteData(project: EditorProject) {
   const intake = project.intake!;
-  return { name: intake.brandName, type: intake.siteKind, source: intake.sourceUrl, summary: intake.answer.summary, sections: intake.sections, actions: intake.actions, seoAudit: intake.seo, generatedAt: project.generated?.generatedAt };
+  return {
+    name: intake.brandName,
+    type: intake.siteKind,
+    source: intake.sourceUrl,
+    summary: intake.answer.summary,
+    sections: intake.sections,
+    actions: intake.actions,
+    visuals: {
+      sourceImages: project.assets.filter((asset) => asset.purpose === "reference").length,
+      generatedBrandScenes: project.assets.filter((asset) => asset.purpose === "generated").length,
+      productImagePolicy: "Source-store product images only"
+    },
+    seoAudit: intake.seo,
+    generatedAt: project.generated?.generatedAt
+  };
 }
 
 function buildReadme(project: EditorProject) {
-  return `# ${project.name} animated website\n\nGenerated locally by Irie Animate from public website images. No external animation API was used.\n\n## View locally\n\n\`\`\`bash\npython3 -m http.server 8080\n\`\`\`\n\nOpen http://localhost:8080.\n\n## Search foundation\n\nThe package includes technical metadata, JSON-LD, robots.txt, sitemap.xml, llms.txt, answer-ready FAQ content, and a draft mcp-actions.json discovery manifest. These are technical foundations, not a promise of rankings or AI citations.\n`;
+  const generatedScenes = project.assets.filter((asset) => asset.purpose === "generated").length;
+  const visualSource = generatedScenes
+    ? `Irie Animate created ${generatedScenes} branded editorial scenes because the source site needed more usable imagery.`
+    : "Irie Animate used public images from the source website.";
+  return `# ${project.name} animated website\n\nGenerated locally by Irie Animate. ${visualSource} No external animation API was used.\n\n## View locally\n\n\`\`\`bash\npython3 -m http.server 8080\n\`\`\`\n\nOpen http://localhost:8080.\n\n## Search foundation\n\nThe package includes technical metadata, JSON-LD, robots.txt, sitemap.xml, llms.txt, answer-ready FAQ content, and a draft mcp-actions.json discovery manifest. These are technical foundations, not a promise of rankings or AI citations.\n`;
 }
 
 function safeJson(value: unknown) {
