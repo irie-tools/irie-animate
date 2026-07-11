@@ -69,6 +69,7 @@ export interface SpineMeta {
   brief?: Record<string, unknown>;
   referenceId?: string;
   sourceUrl?: string;
+  animateProjectId?: string;
   platform: "irie-builder";
 }
 
@@ -261,6 +262,9 @@ export function buildSiteSpine(
     meta: {
       brief: { brandName: intake.brandName, headline },
       sourceUrl: intake.sourceUrl,
+      // Lets Irie Builder's "Edit in Animate" reopen this project at
+      // <ANIMATE_URL>/preview/<id>.
+      animateProjectId: project.id,
       platform: "irie-builder",
     },
   };
